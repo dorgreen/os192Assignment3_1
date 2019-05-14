@@ -36,22 +36,26 @@ enum procstate { UNUSED, EMBRYO, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
 
 // Per-process state
 struct proc {
-  uint sz;                     // Size of process memory (bytes)
-  pde_t* pgdir;                // Page table
-  char *kstack;                // Bottom of kernel stack for this process
-  enum procstate state;        // Process state
-  int pid;                     // Process ID
-  struct proc *parent;         // Parent process
-  struct trapframe *tf;        // Trap frame for current syscall
-  struct context *context;     // swtch() here to run process
-  void *chan;                  // If non-zero, sleeping on chan
-  int killed;                  // If non-zero, have been killed
-  struct file *ofile[NOFILE];  // Open files
-  struct inode *cwd;           // Current directory
-  char name[16];               // Process name (debugging)
+    uint sz;                     // Size of process memory (bytes)
+    pde_t* pgdir;                // Page table ; first 10 bits of virt address
+    char *kstack;                // Bottom of kernel stack for this process
+    enum procstate state;        // Process state
+    int pid;                     // Process ID
+    struct proc *parent;         // Parent process
+    struct trapframe *tf;        // Trap frame for current syscall
+    struct context *context;     // swtch() here to run process
+    void *chan;                  // If non-zero, sleeping on chan
+    int killed;                  // If non-zero, have been killed
+    struct file *ofile[NOFILE];  // Open files
+    struct inode *cwd;           // Current directory
+    char name[16];               // Process name (debugging)
 
-  //Swap file. must initiate with create swap file
-  struct file *swapFile;      //page file
+    //Swap file. must initiate with create swap file
+    struct file *swapFile;      //page file
+
+    // TODO: probably should add some paging meta-data to know know which pages
+    // are in the process' swap file and where they are located in that file
+    // #TASK2.1
 };
 
 // Process memory is laid out contiguously, low addresses first:

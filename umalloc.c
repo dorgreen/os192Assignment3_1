@@ -88,3 +88,33 @@ malloc(uint nbytes)
         return 0;
   }
 }
+
+
+// #TASK1
+// Allocates exactly one page, starting from a new page (page-aligned)
+// A PTE can only
+// refer to a physical address that is aligned on a 4096-byte boundary
+// We can use PGROUNDDOWN to round the virtual address down to a page boundary.
+void* pmalloc(){
+  // starting from current free spot, jump to the next page
+
+  // allocate it, update pointers
+  return 0;
+
+}
+
+// #TASK1
+// If *ap is the start of a page allocated with PMALLOC, protect if (return 1)
+// else, return -1
+// we could protect by setting the "WRITABLE" bit (bit 1) of address ( PTE_W )
+int protect_page(void* ap){
+  return -1;
+}
+
+// #TASK1
+// release a protected page. return 1 upon success
+// if page is unprotected (or not a page) do nothing and return -1
+int pfree(void* ap){
+  return -1;
+
+}
