@@ -99,17 +99,17 @@ malloc(uint nbytes) {
 // Start at myproc->pgdir, use walkpgdir() to allocate a new page
 // then,  mark it with PTE_PM
 void *pmalloc(void) {
-    void *page;
+    uint page_index;
 
-    page = (void*) alloc_page_aligned();
+    page_index = alloc_page_aligned();
 
     // try to set flags!
-    if(!set_flags((uint)page, PTE_PM, 0)){
-      free(page);
-        return 0;
+    if(!set_flags(page_index, PTE_PM, 0)){
+      free((void*)page_index);
+      return 0;
     }
 
-    return page;
+    return (void*) page_index;
 }
 
 // #TASK1
@@ -118,12 +118,11 @@ void *pmalloc(void) {
 // we could protect by setting the "WRITABLE" bit (bit 1) of address ( PTE_W )
 int protect_page(void* ap){
     // if not pmalloc'd or if not start of page
+    // TODO: REPLACE ME WITH A CALL TO get_flags
     if(!((uint)ap & PTE_PM) || (uint)ap != PGROUNDUP((uint) ap)){
         return -1;
     }
-
-    return  set_flags((uint) ap, PTE_W, 0);
-
+    return  set_flags((uint) ap, ~PTE_W, 1);
 }
 
 // #TASK1
@@ -131,6 +130,7 @@ int protect_page(void* ap){
 // if page is unprotected (or not a page) do nothing and return -1
 int pfree(void* ap){
     // if not pmalloc'd or if not start of page
+    // TODO: REPLACE ME WITH A CALL TO get_flags
     if(!((uint)ap & PTE_PM) || (uint)ap != PGROUNDUP((uint) ap)){
         return -1;
     }
