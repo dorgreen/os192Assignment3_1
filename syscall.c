@@ -104,6 +104,9 @@ extern int sys_wait(void);
 extern int sys_write(void);
 extern int sys_uptime(void);
 extern int sys_yield(void);
+extern int sys_alloc_page_aligned(void);
+extern int sys_set_flags(void);
+
 
 static int (*syscalls[])(void) = {
 [SYS_fork]    sys_fork,
@@ -128,6 +131,8 @@ static int (*syscalls[])(void) = {
 [SYS_mkdir]   sys_mkdir,
 [SYS_close]   sys_close,
 [SYS_yield]   sys_yield,
+[SYS_alloc_page_aligned]   sys_alloc_page_aligned,
+[SYS_set_flags] sys_set_flags,
 };
 
 void

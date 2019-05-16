@@ -443,3 +443,24 @@ sys_pipe(void)
   fd[1] = fd1;
   return 0;
 }
+
+
+// parameters: va, flags, SET or ADD
+int sys_set_flags(void){
+  int va, flags, set;
+  if(argint(0,&va) < 0 )
+    goto bad;
+  if(argint(1,&flags) < 0 )
+    goto bad;
+  if(argint(2,&set) < 0 )
+    goto bad;
+
+  return set_flags(va,flags,set);
+
+  bad:
+  return -1;
+}
+
+int sys_alloc_page_aligned(void){
+  return alloc_page_aligned();
+}

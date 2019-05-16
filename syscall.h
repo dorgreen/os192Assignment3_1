@@ -21,3 +21,6 @@
 #define SYS_mkdir  20
 #define SYS_close  21
 #define SYS_yield  22
+#define SYS_alloc_page_aligned 23
+#define SYS_set_flags 24
+

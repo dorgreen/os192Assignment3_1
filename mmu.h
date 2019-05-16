@@ -141,8 +141,8 @@ struct segdesc {
 #define PTE_D           0x040   // Dirty
 #define PTE_PS          0x080   // Page Size
 #define PTE_MBZ         0x180   // Bits must be zero
-#define PTE_PG          0x200   // Paged out to secondary storage #TASK2.1
-
+#define PTE_PG          0x200   // Paged out to secondary storage #TASK2.1 ; bit 9
+#define PTE_PM          0x400   // Page created with PMALLOC. bit 10 ; second AVL
 
 // Address in page table or page directory entry
 #define PTE_ADDR(pte)   ((uint)(pte) & ~0xFFF)

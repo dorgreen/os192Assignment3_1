@@ -54,6 +54,67 @@ walkpgdir(pde_t *pgdir, const void *va, int alloc)
   return &pgtab[PTX(va)];
 }
 
+// This function (syscall) outputs a pte_t* of a newly allocated page that is page-alligned
+// We use it in pmalloc()
+// follows walkpgdir's code
+uint
+alloc_page_aligned(void){
+  struct proc* this_proc;
+  pde_t *pgdir;
+  pte_t *ans;
+  int va;
+
+  this_proc = myproc();
+
+  // setup our own call to walkpgdir
+  pgdir = (this_proc->pgdir);
+  va = myproc()->sz; // the size points to the next used page
+  va = PGROUNDUP(va); // Skip to the start of the next page if needed
+
+  ans = walkpgdir(pgdir,(void*)va, 1);
+
+  return (uint) ans;
+
+}
+
+// get address for a page (as uint)
+// set flags to this address' PDE
+// if SET==1 do & with flags (SET them to flags)
+// if SET==0 do | with flags (ADD flags to them)
+int
+set_flags(uint va, int flags, int set){
+  // follows walkpgdir' code
+  pde_t *pde;
+  pte_t *pgtab;
+  struct proc * this_proc;
+
+  // TODO: make sure flags are legal
+  // TODO: make sure va is legal
+
+  this_proc = myproc();
+  pde = myproc()->pgdir;
+  // first get the table entry
+
+
+  pde = &pgdir[PDX(va)];
+  if(*pde & PTE_P) {
+    pgtab = (pte_t *) P2V(PTE_ADDR(*pde));
+
+
+    // ADD the flags using BITWISE OR
+    if (!set) {
+      *pde = V2P(pgtab) | flags;
+    }
+    // SET the flags using BITWISE AND
+    else {
+      *pde = V2P(pgtab) & flags;
+    }
+  }
+
+  return 1;
+}
+
+
 // Create PTEs for virtual addresses starting at va that refer to
 // physical addresses starting at pa. va and size might not
 // be page-aligned.

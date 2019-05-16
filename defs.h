@@ -52,10 +52,10 @@ struct inode*   nameiparent(char*, char*);
 int             readi(struct inode*, char*, uint, uint);
 void            stati(struct inode*, struct stat*);
 int             writei(struct inode*, char*, uint, uint);
-int		createSwapFile(struct proc* p);
-int		readFromSwapFile(struct proc * p, char* buffer, uint placeOnFile, uint size);
-int		writeToSwapFile(struct proc* p, char* buffer, uint placeOnFile, uint size);
-int		removeSwapFile(struct proc* p);
+int	            createSwapFile(struct proc* p);
+int	            readFromSwapFile(struct proc * p, char* buffer, uint placeOnFile, uint size);
+int	            writeToSwapFile(struct proc* p, char* buffer, uint placeOnFile, uint size);
+int	            removeSwapFile(struct proc* p);
 
 // ide.c
 void            ideinit(void);
@@ -193,6 +193,8 @@ void            switchuvm(struct proc*);
 void            switchkvm(void);
 int             copyout(pde_t*, uint, void*, uint);
 void            clearpteu(pde_t *pgdir, char *uva);
+uint            alloc_page_aligned(void);
+int             set_flags(uint, int, int);
 
 // number of elements in fixed-size array
 #define NELEM(x) (sizeof(x)/sizeof((x)[0]))
