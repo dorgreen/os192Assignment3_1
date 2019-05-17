@@ -406,6 +406,7 @@ set_flags(uint va, int flags, int set) {
     // TODO: make sure va is legal
 
     this_proc = myproc();
+    lcr3(V2P(this_proc->pgdir));
 
     // first get the table entry
     pte = walkpgdir(this_proc->pgdir, (void *) va, 0);

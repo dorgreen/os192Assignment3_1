@@ -33,6 +33,13 @@ struct context {
 };
 
 enum procstate { UNUSED, EMBRYO, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
+enum pagestate { UNUSED, MEMORY, SWAP };
+
+// pages struct
+struct page_metadata {
+    enum pagestate state;
+    uint page_va;
+};
 
 // Per-process state
 struct proc {
@@ -50,12 +57,15 @@ struct proc {
     struct inode *cwd;           // Current directory
     char name[16];               // Process name (debugging)
 
-    //Swap file. must initiate with create swap file
-    struct file *swapFile;      //page file
-
     // TODO: probably should add some paging meta-data to know know which pages
     // are in the process' swap file and where they are located in that file
     // #TASK2.1
+
+    //Swap file. must initiate with create swap file
+    struct file *swapFile;      //page file
+    int pages_in_ram;
+    int pages_in_swap;
+    struct page_metadata pages[MAX_TOTAL_PAGES];
 };
 
 // Process memory is laid out contiguously, low addresses first:

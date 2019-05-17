@@ -150,6 +150,11 @@ struct segdesc {
 
 // Test if a given pte was allocated with PMALLOC and also was protected.
 #define PM_LOCKED(pte) (PTE_FLAGS(pte) & PTE_PM) && !(PTE_FLAGS(pte) & ~PTE_PM)
+#define PAGEDOUT(pte) PTE_FLAGS(pte) & PTE_PG
+
+// for swapping code
+#define MAX_PSYC_PAGES 16
+#define MAX_TOTAL_PAGES 32
 
 #ifndef __ASSEMBLER__
 typedef uint pte_t;
