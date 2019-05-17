@@ -148,6 +148,9 @@ struct segdesc {
 #define PTE_ADDR(pte)   ((uint)(pte) & ~0xFFF)
 #define PTE_FLAGS(pte)  ((uint)(pte) &  0xFFF)
 
+// Test if a given pte was allocated with PMALLOC and also was protected.
+#define PM_LOCKED(pte) (PTE_FLAGS(pte) & PTE_PM) && !(PTE_FLAGS(pte) & ~PTE_PM)
+
 #ifndef __ASSEMBLER__
 typedef uint pte_t;
 

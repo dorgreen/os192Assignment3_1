@@ -96,7 +96,7 @@ malloc(uint nbytes) {
 // A PTE can only
 // refer to a physical address that is aligned on a 4096-byte boundary
 // We can use PGROUNDUP to round the virtual address up to a page boundary.
-// Start at myproc->pgdir, use walkpgdir() to allocate a new page
+// Start at myproc->pgdir, allocuvm to allocate a new page
 // then,  mark it with PTE_PM
 void *pmalloc(void) {
     uint page_index;
@@ -117,12 +117,11 @@ void *pmalloc(void) {
 // else, return -1
 // we could protect by setting the "WRITABLE" bit (bit 1) of address ( PTE_W )
 int protect_page(void* ap){
-    // if not pmalloc'd or if not start of page
-    // TODO: REPLACE ME WITH A CALL TO get_flags
-    if(!((uint)ap & PTE_PM) || (uint)ap != PGROUNDUP((uint) ap)){
-        return -1;
+    // if pmalloc'd and start of page
+    if((get_flags((uint)ap) & PTE_PM)){
+        return set_flags((uint) ap, ~PTE_W, 1);
     }
-    return  set_flags((uint) ap, ~PTE_W, 1);
+    return -1;
 }
 
 // #TASK1
@@ -130,8 +129,8 @@ int protect_page(void* ap){
 // if page is unprotected (or not a page) do nothing and return -1
 int pfree(void* ap){
     // if not pmalloc'd or if not start of page
-    // TODO: REPLACE ME WITH A CALL TO get_flags
-    if(!((uint)ap & PTE_PM) || (uint)ap != PGROUNDUP((uint) ap)){
+    // TODO: is that the right way to make sure it's page alligned?
+    if(!(get_flags((uint)ap) & PTE_PM) || (uint)ap != PGROUNDUP((uint) ap)){
         return -1;
     }
     // Clear PMALLOC flag

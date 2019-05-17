@@ -23,4 +23,5 @@
 #define SYS_yield  22
 #define SYS_alloc_page_aligned 23
 #define SYS_set_flags 24
+#define SYS_get_flags 25
 

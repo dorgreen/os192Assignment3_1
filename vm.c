@@ -410,7 +410,7 @@ set_flags(uint va, int flags, int set) {
     // first get the table entry
     pte = walkpgdir(this_proc->pgdir, (void *) va, 0);
 
-    cprintf("pte = %x\n", *pte);
+    //cprintf("pte = %x\n", *pte); // DEBUG ONLY
 
     if(pte){
         // ADD the flags using BITWISE OR
@@ -421,12 +421,24 @@ set_flags(uint va, int flags, int set) {
         else {
             *pte &= flags;
         }
-
-        cprintf("after = %x\n", *pte);
         return 1;
     }
 
     return -1;
+}
+
+int
+get_flags(uint va){
+    pte_t *pte;
+    struct proc *this_proc;
+
+    this_proc = myproc();
+
+    // first get the table entry
+    pte = walkpgdir(this_proc->pgdir, (void *) va, 0);
+    if(pte == 0) return -1;
+
+    return PTE_FLAGS(*pte);
 }
 
 //PAGEBREAK!

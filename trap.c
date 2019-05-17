@@ -80,6 +80,10 @@ trap(struct trapframe *tf)
 
   //PAGEBREAK: 13
   default:
+    if(tf->trapno == T_PGFLT && PM_LOCKED(rcr2())){
+      tf->eax = T_GPFLT; // TASK1: Fail with exit code 13 if it's locked.
+    }
+
     if(myproc() == 0 || (tf->cs&3) == 0){
       // In kernel, it must be our mistake.
       cprintf("unexpected trap %d from cpu %d eip %x (cr2=0x%x)\n",

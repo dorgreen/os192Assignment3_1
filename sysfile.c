@@ -464,3 +464,15 @@ int sys_set_flags(void){
 int sys_alloc_page_aligned(void){
   return alloc_page_aligned();
 }
+
+int sys_get_flags(void){
+  int va;
+  if(argint(0,&va) < 0 )
+    goto bad;
+
+  return get_flags(va);
+
+  bad:
+  return -1;
+
+}

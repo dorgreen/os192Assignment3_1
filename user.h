@@ -28,6 +28,7 @@ int uptime(void);
 int yield(void);
 int alloc_page_aligned(void);
 int set_flags(unsigned int, int, int);
+int get_flags(unsigned int);
 
 // ulib.c
 int stat(char*, struct stat*);
