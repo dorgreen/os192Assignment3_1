@@ -33,12 +33,14 @@ struct context {
 };
 
 enum procstate { UNUSED, EMBRYO, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
-enum pagestate { UNUSED, MEMORY, SWAP };
+enum pagestate { PAGE_UNUSED, MEMORY, SWAP };
 
 // pages struct
+// page offset is given by place in array
 struct page_metadata {
     enum pagestate state;
     uint page_va;
+    uint time_updated; // Ticks when this page was loaded into memory
 };
 
 // Per-process state
@@ -61,7 +63,7 @@ struct proc {
     // are in the process' swap file and where they are located in that file
     // #TASK2.1
 
-    //Swap file. must initiate with create swap file
+    // Swap file. must initiate with create swap file
     struct file *swapFile;      //page file
     int pages_in_ram;
     int pages_in_swap;

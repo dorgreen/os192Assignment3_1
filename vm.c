@@ -77,6 +77,53 @@ mappages(pde_t *pgdir, void *va, uint size, uint pa, int perm) {
     return 0;
 }
 
+// find a page with that address
+struct page_metadata *find_page_md(void *va) {
+    struct proc *this_proc = myproc();
+    for (int i = 0; i < MAX_TOTAL_PAGES; i++) {
+        if (this_proc->pages[i].page_va == (uint) va) {
+            return &this_proc->pages[i];
+        }
+    }
+    return 0;
+}
+
+
+struct page_metadata *find_empty_page_md(void) {
+    struct proc *this_proc = myproc();
+    for (int i = 0; i < MAX_TOTAL_PAGES; i++) {
+        if (this_proc->pages[i].state == PAGE_UNUSED) {
+            return &this_proc->pages[i];
+        }
+    }
+    return 0;
+}
+
+// We use this index to map swap file to myproc()->pages
+int page_md_to_index(struct page_metadata *md) {
+    if (md == 0) return -1;
+    return ((uint) md - (uint) &(myproc()->pages)) / sizeof(struct page_metadata);
+}
+
+// remove the page from our DSs
+int reset_page_md(void *va) {
+    struct page_metadata *page = find_page_md(va);
+    if (page == 0) {
+        return -1;
+    }
+    if (page->state == MEMORY) {
+        myproc()->pages_in_ram--;
+    }
+    if (page->state == SWAP) {
+        myproc()->pages_in_swap--;
+    }
+    page->time_updated = -1;
+    page->state = UNUSED;
+    page->page_va = -1;
+    return 1;
+}
+
+
 // There is one page table per process, plus one that's used when
 // a CPU is not running any process (kpgdir). The kernel uses the
 // current process's page table during system calls and interrupts;
@@ -209,12 +256,50 @@ loaduvm(pde_t *pgdir, char *addr, struct inode *ip, uint offset, uint sz) {
     return 0;
 }
 
-// Allocate page tables and physical memory to grow process from oldsz to
+int swap_out(void){
+    // TODO: ADD POLICIES!
+    struct proc* this_proc;
+    int page_md_index = 0; // The index of the selected page to swap
+    this_proc = myproc();
+
+    // LIFO:
+    uint oldest = ~0; // THE LAREGEST UINT!!!!!
+    struct page_metadata* to_swap = 0;
+    for(page_md_index = 0 ; page_md_index < MAX_TOTAL_PAGES ; page_md_index++){
+        if(this_proc->pages[page_md_index].state != PAGE_UNUSED && this_proc->pages[page_md_index].time_updated <= oldest){
+            oldest = this_proc->pages[page_md_index].time_updated;
+            to_swap = &this_proc->pages[page_md_index];
+        }
+    }
+
+    //SCFIFO
+    // TODO: add code that selects page_metadata entry according to SCFIFO and puts it in to_swap
+
+    // COMMON CODE:
+    if(to_swap == 0) return -1;
+    // Clear PTE_P FLAG!
+    set_flags(to_swap->page_va, ~PTE_P, 1);
+    // Set PTE_PG FLAG!
+    set_flags(to_swap->page_va, PTE_PG, 0);
+
+    writeToSwapFile(this_proc, (char*)to_swap->page_va, page_md_index*PGSIZE, PGSIZE);
+    kfree((char*)to_swap->page_va);
+    to_swap->time_updated = -1;
+    to_swap->state = SWAP;
+    return 1;
+}
+
+
+// Allocate page tables  and physical memory to grow process from oldsz to
 // newsz, which need not be page aligned.  Returns new size or 0 on error.
 int
 allocuvm(pde_t *pgdir, uint oldsz, uint newsz) {
     char *mem;
     uint a;
+    struct proc *this_proc;
+    int pages_to_add;
+    int pages_to_swap = 0;
+    struct page_metadata *free_page;
 
     if (newsz >= KERNBASE)
         return 0;
@@ -222,19 +307,63 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz) {
         return oldsz;
 
     a = PGROUNDUP(oldsz);
+    // check if pages need to be swapped
+    // swap according to policy
+
+    this_proc = myproc();
+    pages_to_add = (PGROUNDUP(newsz) - PGROUNDUP(oldsz)) / PGSIZE;
+
+    // check if it's too many pages
+    if (this_proc->pages_in_ram + this_proc->pages_in_swap + pages_to_add >= MAX_TOTAL_PAGES) {
+        panic("Not enough pages!");
+    }
+
+    // pages need to be swapped!
+    if (this_proc->pages_in_ram + pages_to_add >= MAX_PSYC_PAGES) {
+        pages_to_swap = 1 + this_proc->pages_in_ram + pages_to_add - MAX_PSYC_PAGES;
+    }
+
+
+    // Swap them pages out!
+    // If we're in INIT or SH no need to keep track...
+    if (this_proc->pid > 2) {
+        while (pages_to_swap > 0) {
+            if (pages_to_swap > 1) {
+                swap_out(); // also updates proc->pages_in_ram ; proc->pages_in_swap AND frees the page from RAM!
+                lcr3(V2P(this_proc->pgdir));
+                pages_to_swap--;
+            }
+        }
+    }
+
+
     for (; a < newsz; a += PGSIZE) {
+        // Adding new code for page swapping...
         mem = kalloc();
+
         if (mem == 0) {
             cprintf("allocuvm out of memory\n");
             deallocuvm(pgdir, newsz, oldsz);
             return 0;
         }
         memset(mem, 0, PGSIZE);
+
         if (mappages(pgdir, (char *) a, PGSIZE, V2P(mem), PTE_W | PTE_U) < 0) {
             cprintf("allocuvm out of memory (2)\n");
             deallocuvm(pgdir, newsz, oldsz);
             kfree(mem);
             return 0;
+        }
+
+        // Add new page to datastructue
+        // register page in DSs
+        if(this_proc->pid > 2){
+            // Can't fail as we have enough slots
+            free_page = find_empty_page_md();
+            this_proc->pages_in_ram++;
+            free_page->state = MEMORY;
+            free_page->page_va = (uint) mem;
+            free_page->time_updated = ticks;
         }
     }
     return newsz;
@@ -253,10 +382,14 @@ deallocuvm(pde_t *pgdir, uint oldsz, uint newsz) {
         return oldsz;
 
     a = PGROUNDUP(newsz);
+
+    // go after pages to be removed...
     for (; a < oldsz; a += PGSIZE) {
         pte = walkpgdir(pgdir, (char *) a, 0);
-        if (!pte)
-            a = PGADDR(PDX(a) + 1, 0, 0) - PGSIZE;
+
+        if (!pte) // if these is no data, just skip TODO: if page was page-swapped????
+            a += (NPTENTRIES - 1) * PGSIZE; //PGADDR(PDX(a) + 1, 0, 0) - PGSIZE;
+
         else if ((*pte & PTE_P) != 0) {
             pa = PTE_ADDR(*pte);
             if (pa == 0)
@@ -265,6 +398,14 @@ deallocuvm(pde_t *pgdir, uint oldsz, uint newsz) {
             kfree(v);
             *pte = 0;
         }
+
+        // If it's paged out no need to free it, but pointer should be removed
+        if(*pte & PTE_PG){
+            *pte = 0;
+        }
+
+        // remove pte from swapping DSs
+        reset_page_md((void*) a);
     }
     return newsz;
 }
@@ -413,7 +554,7 @@ set_flags(uint va, int flags, int set) {
 
     //cprintf("pte = %x\n", *pte); // DEBUG ONLY
 
-    if(pte){
+    if (pte) {
         // ADD the flags using BITWISE OR
         if (!set) {
             *pte |= flags;
@@ -429,7 +570,7 @@ set_flags(uint va, int flags, int set) {
 }
 
 int
-get_flags(uint va){
+get_flags(uint va) {
     pte_t *pte;
     struct proc *this_proc;
 
@@ -437,7 +578,7 @@ get_flags(uint va){
 
     // first get the table entry
     pte = walkpgdir(this_proc->pgdir, (void *) va, 0);
-    if(pte == 0) return -1;
+    if (pte == 0) return -1;
 
     return PTE_FLAGS(*pte);
 }

@@ -38,10 +38,10 @@ struct cpu*
 mycpu(void)
 {
   int apicid, i;
-  
+
   if(readeflags()&FL_IF)
     panic("mycpu called with interrupts enabled\n");
-  
+
   apicid = lapicid();
   // APIC IDs are not guaranteed to be contiguous. Maybe we should have
   // a reverse map, or reserve a register to store &cpus[i].
@@ -124,7 +124,7 @@ userinit(void)
   extern char _binary_initcode_start[], _binary_initcode_size[];
 
   p = allocproc();
-  
+
   initproc = p;
   if((p->pgdir = setupkvm()) == 0)
     panic("userinit: out of memory?");
@@ -212,6 +212,39 @@ fork(void)
 
   pid = np->pid;
 
+  createSwapFile(np);
+  // init and sh procs have no swap file, create a new for the new proc
+  if(np->pid < 2){
+    curproc->pages_in_swap = 0;
+    curproc->pages_in_ram = 0;
+    struct page_metadata* pgmd;
+    for(int i = 0; i < MAX_TOTAL_PAGES; i++){
+      pgmd = &np->pages[i];
+      pgmd->state = PAGE_UNUSED;
+      pgmd->time_updated = -1;
+      pgmd->page_va = -1;
+    }
+  }
+  else{ // new proc is NOT sh or init, the common case...
+    // deep copy DSs
+      for(int i = 0 ; i < MAX_TOTAL_PAGES ; i++){
+          np->pages[i] = curproc->pages[i];
+      }
+
+
+    // deep copy the swapfile
+    if(curproc->swapFile != 0){
+      char buf[2048];
+      for(int i = 0; i < (MAX_TOTAL_PAGES - 1) * PGSIZE; i += 2048){
+        readFromSwapFile(curproc,buf,i,2048);
+        writeToSwapFile(np,buf,i,2048);
+      }
+    }
+  }
+
+  np->pages_in_ram = curproc-> pages_in_ram;
+  np->pages_in_swap = curproc-> pages_in_swap;
+
   acquire(&ptable.lock);
 
   np->state = RUNNABLE;
@@ -261,6 +294,18 @@ exit(void)
     }
   }
 
+  // Reset all DSs for this proc (just a precausion)
+  struct page_metadata* pgmd;
+  for(int i = 0; i < MAX_TOTAL_PAGES; i++){
+    pgmd = &curproc->pages[i];
+    pgmd->state = PAGE_UNUSED;
+    pgmd->time_updated = -1;
+    pgmd->page_va = -1;
+  }
+  curproc->pages_in_swap = 0;
+  curproc->pages_in_ram = 0;
+  removeSwapFile(curproc);
+
   // Jump into the scheduler, never to return.
   curproc->state = ZOMBIE;
   sched();
@@ -275,7 +320,7 @@ wait(void)
   struct proc *p;
   int havekids, pid;
   struct proc *curproc = myproc();
-  
+
   acquire(&ptable.lock);
   for(;;){
     // Scan through table looking for exited children.
@@ -325,7 +370,7 @@ scheduler(void)
   struct proc *p;
   struct cpu *c = mycpu();
   c->proc = 0;
-  
+
   for(;;){
     // Enable interrupts on this processor.
     sti();
@@ -418,7 +463,7 @@ void
 sleep(void *chan, struct spinlock *lk)
 {
   struct proc *p = myproc();
-  
+
   if(p == 0)
     panic("sleep");
 
