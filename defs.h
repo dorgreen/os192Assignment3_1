@@ -9,6 +9,7 @@ struct spinlock;
 struct sleeplock;
 struct stat;
 struct superblock;
+struct page_metadata;
 
 // bio.c
 void            binit(void);
@@ -196,6 +197,7 @@ void            clearpteu(pde_t *pgdir, char *uva);
 uint            alloc_page_aligned(void);
 int             set_flags(uint, int, int);
 int             get_flags(unsigned int);
+int             page_md_free(struct page_metadata*);
 
 // number of elements in fixed-size array
 #define NELEM(x) (sizeof(x)/sizeof((x)[0]))

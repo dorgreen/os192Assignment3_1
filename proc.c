@@ -298,6 +298,8 @@ exit(void)
   struct page_metadata* pgmd;
   for(int i = 0; i < MAX_TOTAL_PAGES; i++){
     pgmd = &curproc->pages[i];
+      // FREE THE PAGES!
+    page_md_free(pgmd);
     pgmd->state = PAGE_UNUSED;
     pgmd->time_updated = -1;
     pgmd->page_va = -1;

@@ -123,6 +123,26 @@ int reset_page_md(void *va) {
     return 1;
 }
 
+// If in MEMORY, free it.
+// WONT UPDATE ANY DATA STRUCTURES!!!!!!!!!!!!!!
+int page_md_free(struct page_metadata* pgmd){
+    uint pa;
+    if(pgmd->state == MEMORY){
+        pte_t* pte = walkpgdir(myproc()->pgdir, (void*)pgmd->page_va, 0);
+        if(pte == 0) panic("Swapping a virtual address that has no physical address!!");
+
+        if ((*pte & PTE_P) != 0) {
+            pa = PTE_ADDR(*pte);
+            if (pa == 0)
+                panic("kfree");
+            char *v = P2V(pa);
+            kfree(v);
+        }
+        else return -1;
+        return 1;
+    }
+    return -1;
+}
 
 // There is one page table per process, plus one that's used when
 // a CPU is not running any process (kpgdir). The kernel uses the
@@ -275,20 +295,63 @@ int swap_out(void){
     //SCFIFO
     // TODO: add code that selects page_metadata entry according to SCFIFO and puts it in to_swap
 
+
+
     // COMMON CODE:
     if(to_swap == 0) return -1;
+
+    writeToSwapFile(this_proc, (char*)to_swap->page_va, page_md_index*PGSIZE, PGSIZE);
+
+    if(page_md_free(to_swap) == -1)
+        return -1;
+
     // Clear PTE_P FLAG!
     set_flags(to_swap->page_va, ~PTE_P, 1);
     // Set PTE_PG FLAG!
     set_flags(to_swap->page_va, PTE_PG, 0);
 
-    writeToSwapFile(this_proc, (char*)to_swap->page_va, page_md_index*PGSIZE, PGSIZE);
-    kfree((char*)to_swap->page_va);
     to_swap->time_updated = -1;
     to_swap->state = SWAP;
+    this_proc->pages_in_swap++;
+    this_proc->pages_in_ram--;
     return 1;
 }
 
+int swap_in(uint va){
+    struct proc* this_proc;
+    struct page_metadata* pgmd;
+
+    this_proc = myproc();
+    pgmd = find_page_md((void*)va);
+    if(pgmd == 0) return -1;
+
+    // check if it's too many pages
+    if (this_proc->pages_in_ram + this_proc->pages_in_swap + 1 >= MAX_TOTAL_PAGES) {
+        return -1;
+    }
+
+    // a page needs to be swapped!
+    if (this_proc->pages_in_ram + 1 >= MAX_PSYC_PAGES) {
+        if(swap_out() == -1)
+            return -1;
+        lcr3(V2P(this_proc->pgdir));
+    }
+
+    // By now, there is a free physical page for this page!
+    readFromSwapFile(this_proc, (char*)pgmd->page_va, page_md_to_index(pgmd)*PGSIZE, PGSIZE);
+
+    // Mark as present and NOT PG
+    set_flags(pgmd->page_va, PTE_P, 0);
+    set_flags(pgmd->page_va, ~PTE_PG, 1);
+
+    // update metadata
+    pgmd->state = MEMORY;
+    pgmd->time_updated = ticks;
+    this_proc->pages_in_ram++;
+    this_proc->pages_in_swap--;
+
+    return 1;
+}
 
 // Allocate page tables  and physical memory to grow process from oldsz to
 // newsz, which need not be page aligned.  Returns new size or 0 on error.
@@ -376,7 +439,7 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz) {
 int
 deallocuvm(pde_t *pgdir, uint oldsz, uint newsz) {
     pte_t *pte;
-    uint a, pa;
+    uint a;
 
     if (newsz >= oldsz)
         return oldsz;
@@ -390,21 +453,14 @@ deallocuvm(pde_t *pgdir, uint oldsz, uint newsz) {
         if (!pte) // if these is no data, just skip TODO: if page was page-swapped????
             a += (NPTENTRIES - 1) * PGSIZE; //PGADDR(PDX(a) + 1, 0, 0) - PGSIZE;
 
-        else if ((*pte & PTE_P) != 0) {
-            pa = PTE_ADDR(*pte);
-            if (pa == 0)
-                panic("kfree");
-            char *v = P2V(pa);
-            kfree(v);
-            *pte = 0;
-        }
-
         // If it's paged out no need to free it, but pointer should be removed
-        if(*pte & PTE_PG){
+        // If it's present, now it's not :)
+        else if(*pte & PTE_PG || *pte & PTE_P){
             *pte = 0;
         }
 
         // remove pte from swapping DSs
+        page_md_free(find_page_md((void*)a));
         reset_page_md((void*) a);
     }
     return newsz;
