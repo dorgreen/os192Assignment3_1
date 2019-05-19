@@ -123,9 +123,22 @@ int reset_page_md(void *va) {
     return 1;
 }
 
+// return INDEX in swapfile
+int find_place_in_swap(void){
+    struct proc* this_proc = myproc();
+    for(int i = 0 ; i < MAX_PSYC_PAGES ; i++){
+        if(this_proc->swap_spots[i] == 0){
+            return i;
+        }
+    }
+    return -1;
+}
+
 // If in MEMORY, free it.
 // WONT UPDATE ANY DATA STRUCTURES!!!!!!!!!!!!!!
 int page_md_free(struct page_metadata* pgmd){
+    if(pgmd == 0)
+        return -1;
     uint pa;
     if(pgmd->state == MEMORY){
         pte_t* pte = walkpgdir(myproc()->pgdir, (void*)pgmd->page_va, 0);
@@ -139,6 +152,7 @@ int page_md_free(struct page_metadata* pgmd){
             kfree(v);
         }
         else return -1;
+        lcr3(V2P(myproc()->pgdir));
         return 1;
     }
     return -1;
@@ -286,7 +300,7 @@ int swap_out(void){
     uint oldest = ~0; // THE LAREGEST UINT!!!!!
     struct page_metadata* to_swap = 0;
     for(page_md_index = 0 ; page_md_index < MAX_TOTAL_PAGES ; page_md_index++){
-        if(this_proc->pages[page_md_index].state != PAGE_UNUSED && this_proc->pages[page_md_index].time_updated <= oldest){
+        if(this_proc->pages[page_md_index].state == MEMORY && this_proc->pages[page_md_index].time_updated < oldest){
             oldest = this_proc->pages[page_md_index].time_updated;
             to_swap = &this_proc->pages[page_md_index];
         }
@@ -300,7 +314,15 @@ int swap_out(void){
     // COMMON CODE:
     if(to_swap == 0) return -1;
 
-    writeToSwapFile(this_proc, (char*)to_swap->page_va, page_md_index*PGSIZE, PGSIZE);
+    int swapfile_index = find_place_in_swap();
+    if(swapfile_index < 0 )
+        panic("No place in swap!");
+
+    // Mark this spot in swapfile as taken by this page
+    this_proc->swap_spots[swapfile_index] = to_swap;
+    to_swap->offset = swapfile_index*PGSIZE;
+
+    writeToSwapFile(this_proc, (char*)to_swap->page_va, to_swap->offset, PGSIZE);
 
     if(page_md_free(to_swap) == -1)
         return -1;
@@ -338,14 +360,15 @@ int swap_in(uint va){
     }
 
     // By now, there is a free physical page for this page!
-    readFromSwapFile(this_proc, (char*)pgmd->page_va, page_md_to_index(pgmd)*PGSIZE, PGSIZE);
-
+    readFromSwapFile(this_proc, (char*)pgmd->page_va, pgmd->offset, PGSIZE);
+    // update that the spot in swap is free
     // Mark as present and NOT PG
     set_flags(pgmd->page_va, PTE_P, 0);
     set_flags(pgmd->page_va, ~PTE_PG, 1);
 
     // update metadata
     pgmd->state = MEMORY;
+    this_proc->swap_spots[pgmd->offset/PGSIZE] = 0;
     pgmd->time_updated = ticks;
     this_proc->pages_in_ram++;
     this_proc->pages_in_swap--;
@@ -391,11 +414,9 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz) {
     // If we're in INIT or SH no need to keep track...
     if (this_proc->pid > 2) {
         while (pages_to_swap > 0) {
-            if (pages_to_swap > 1) {
-                swap_out(); // also updates proc->pages_in_ram ; proc->pages_in_swap AND frees the page from RAM!
-                lcr3(V2P(this_proc->pgdir));
-                pages_to_swap--;
-            }
+            swap_out(); // also updates proc->pages_in_ram ; proc->pages_in_swap AND frees the page from RAM!
+            lcr3(V2P(this_proc->pgdir));
+            pages_to_swap--;
         }
     }
 
@@ -427,6 +448,7 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz) {
             free_page->state = MEMORY;
             free_page->page_va = (uint) mem;
             free_page->time_updated = ticks;
+            free_page->offset = 0;
         }
     }
     return newsz;
@@ -453,15 +475,15 @@ deallocuvm(pde_t *pgdir, uint oldsz, uint newsz) {
         if (!pte) // if these is no data, just skip TODO: if page was page-swapped????
             a += (NPTENTRIES - 1) * PGSIZE; //PGADDR(PDX(a) + 1, 0, 0) - PGSIZE;
 
-        // If it's paged out no need to free it, but pointer should be removed
-        // If it's present, now it's not :)
-        else if(*pte & PTE_PG || *pte & PTE_P){
-            *pte = 0;
-        }
 
         // remove pte from swapping DSs
         page_md_free(find_page_md((void*)a));
         reset_page_md((void*) a);
+        // If it's paged out no need to free it, but pointer should be removed
+        // If it's present, now it's not :)
+        if(pte && (*pte & PTE_PG || *pte & PTE_P)){
+            *pte = 0;
+        }
     }
     return newsz;
 }

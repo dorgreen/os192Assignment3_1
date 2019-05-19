@@ -280,6 +280,8 @@ exit(void)
   end_op();
   curproc->cwd = 0;
 
+  removeSwapFile(curproc);
+
   acquire(&ptable.lock);
 
   // Parent might be sleeping in wait().
@@ -306,7 +308,7 @@ exit(void)
   }
   curproc->pages_in_swap = 0;
   curproc->pages_in_ram = 0;
-  removeSwapFile(curproc);
+
 
   // Jump into the scheduler, never to return.
   curproc->state = ZOMBIE;

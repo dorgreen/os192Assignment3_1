@@ -40,6 +40,7 @@ enum pagestate { PAGE_UNUSED, MEMORY, SWAP };
 struct page_metadata {
     enum pagestate state;
     uint page_va;
+    uint offset; // WHERE IS IT ON SWAPFILE
     uint time_updated; // Ticks when this page was loaded into memory
 };
 
@@ -68,6 +69,7 @@ struct proc {
     int pages_in_ram;
     int pages_in_swap;
     struct page_metadata pages[MAX_TOTAL_PAGES];
+    struct page_metadata* swap_spots[MAX_PSYC_PAGES]; // either null or the page in that slot
 };
 
 // Process memory is laid out contiguously, low addresses first:
