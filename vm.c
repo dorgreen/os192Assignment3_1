@@ -409,20 +409,19 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz) {
         pages_to_swap = 1 + this_proc->pages_in_ram + pages_to_add - MAX_PSYC_PAGES;
     }
 
-
-    // Swap them pages out!
-    // If we're in INIT or SH no need to keep track...
-    if (this_proc->pid > 2) {
-        while (pages_to_swap > 0) {
-            swap_out(); // also updates proc->pages_in_ram ; proc->pages_in_swap AND frees the page from RAM!
-            lcr3(V2P(this_proc->pgdir));
-            pages_to_swap--;
-        }
-    }
-
-
     for (; a < newsz; a += PGSIZE) {
-        // Adding new code for page swapping...
+        // Swap them pages out!
+        // If we're in INIT or SH no need to keep track...
+        if (this_proc->pid > 2) {
+            if (pages_to_swap > 0) {
+                swap_out(); // also updates proc->pages_in_ram ; proc->pages_in_swap AND frees the page from RAM!
+                lcr3(V2P(this_proc->pgdir));
+                pages_to_swap--;
+            }
+        }
+
+
+
         mem = kalloc();
 
         if (mem == 0) {
@@ -441,15 +440,15 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz) {
 
         // Add new page to datastructue
         // register page in DSs
-        if(this_proc->pid > 2){
+        this_proc->pages_in_ram++;
+        //if(this_proc->pid > 2){
             // Can't fail as we have enough slots
-            free_page = find_empty_page_md();
-            this_proc->pages_in_ram++;
-            free_page->state = MEMORY;
-            free_page->page_va = (uint) mem;
-            free_page->time_updated = ticks;
-            free_page->offset = 0;
-        }
+        free_page = find_empty_page_md();
+        free_page->state = MEMORY;
+        free_page->page_va = (uint) mem;
+        free_page->time_updated = ticks;
+        free_page->offset = 0;
+       // }
     }
     return newsz;
 }

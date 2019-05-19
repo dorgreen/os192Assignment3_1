@@ -8,6 +8,23 @@
 
 int test_no = 0;
 
+int very_simple(int pid){
+    if(pid == 0){
+        printf(1, "rest...\n");
+        sleep(100);
+        printf(1, "exit...\n");
+        exit();
+    }
+    if(pid > 0){
+        printf(1, "Parent waiting on test %d\n", test_no);
+        wait();
+        printf(1, "Done!\n");
+        return 1;
+    }
+    return 0;
+}
+
+
 int simple(int pid){
     if(pid == 0){
         printf(1, "try alloc, access, free...\n");
@@ -72,6 +89,11 @@ int test_paging(int pid, int pages){
 int main(int argc, char *argv[]){
 
     printf(1, "--------- START TESTING! ---------\n");
+
+
+    printf(1, "------- test%d -------\n", test_no);
+    very_simple(fork());
+    test_no++;
 
     printf(1, "------- test%d -------\n", test_no);
     simple(fork());

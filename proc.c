@@ -212,11 +212,10 @@ fork(void)
 
   pid = np->pid;
 
-  createSwapFile(np);
   // init and sh procs have no swap file, create a new for the new proc
   if(np->pid < 2){
-    curproc->pages_in_swap = 0;
-    curproc->pages_in_ram = 0;
+    //curproc->pages_in_swap = 0;
+    //curproc->pages_in_ram = 0;
     struct page_metadata* pgmd;
     for(int i = 0; i < MAX_TOTAL_PAGES; i++){
       pgmd = &np->pages[i];
@@ -226,11 +225,11 @@ fork(void)
     }
   }
   else{ // new proc is NOT sh or init, the common case...
+    createSwapFile(np);
     // deep copy DSs
       for(int i = 0 ; i < MAX_TOTAL_PAGES ; i++){
           np->pages[i] = curproc->pages[i];
       }
-
 
     // deep copy the swapfile
     if(curproc->swapFile != 0){
@@ -238,6 +237,17 @@ fork(void)
       for(int i = 0; i < (MAX_TOTAL_PAGES - 1) * PGSIZE; i += 2048){
         readFromSwapFile(curproc,buf,i,2048);
         writeToSwapFile(np,buf,i,2048);
+      }
+    }
+
+    // deep copy swapfile mappings
+    for(int i = 0 ; i < MAX_PSYC_PAGES; i++){
+      if(curproc->swap_spots[i] == 0){
+        np->swap_spots[i] = 0;
+      }
+      else{
+        // update pointer relatively
+        np->swap_spots[i] = curproc->swap_spots[i] - curproc->swap_spots[0] + np->swap_spots[0];
       }
     }
   }
@@ -306,8 +316,12 @@ exit(void)
     pgmd->time_updated = -1;
     pgmd->page_va = -1;
   }
+  for(int i = 0 ; i < MAX_PSYC_PAGES; i++){
+    curproc->swap_spots[i] = 0;
+  }
   curproc->pages_in_swap = 0;
   curproc->pages_in_ram = 0;
+
 
 
   // Jump into the scheduler, never to return.

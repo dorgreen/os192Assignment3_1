@@ -198,6 +198,7 @@ uint            alloc_page_aligned(void);
 int             set_flags(uint, int, int);
 int             get_flags(unsigned int);
 int             page_md_free(struct page_metadata*);
+int             swap_in(uint);
 
 // number of elements in fixed-size array
 #define NELEM(x) (sizeof(x)/sizeof((x)[0]))

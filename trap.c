@@ -79,11 +79,22 @@ trap(struct trapframe *tf)
     break;
 
 
-  case T_PGFLT:
-    // TASK1: Fail with exit code 13 if it's locked.
-    if(PM_LOCKED(rcr2())){
-      tf->eax = T_GPFLT;
-    }
+    case T_PGFLT:
+        if(myproc()->pid > 2){
+            // TODO: TASK4: add to pagefault counter
+            // TASK1: Fail with exit code 13 if it's locked
+            if(PM_LOCKED(get_flags(PGROUNDDOWN(rcr2())))){
+                tf->eax = T_GPFLT;
+            }
+            // TASK2: check if we got TRAP14 because it was paged' out.
+            //        if it was paged' out, swap it in and continue without trapping
+            if(PAGEDOUT(get_flags(PGROUNDDOWN(rcr2()))) && swap_in(PGROUNDDOWN(rcr2())) > 0){
+                // Page was swapped in succssfully, continue
+                // TODO: HOW TO CONITINUE>?!?!!?!!?!?!!?
+                return;
+            }
+        }
+          // NO BREAK! CONTINUE TO DEFAULT CASE IF NEEDED
 
 //    addr = rcr2();
 //    vaddr = &proc->pgdir[PDX(addr)];
@@ -101,11 +112,6 @@ trap(struct trapframe *tf)
 
           //PAGEBREAK: 13
   default:
-      // TASK2: check if we got TRAP14 because it was paged' out.
-      //        if it was paged' out, swap it in and continue without trapping
-
-
-
     if(myproc() == 0 || (tf->cs&3) == 0){
       // In kernel, it must be our mistake.
       cprintf("unexpected trap %d from cpu %d eip %x (cr2=0x%x)\n",
