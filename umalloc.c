@@ -62,6 +62,23 @@ morecore(uint nu) {
     return freep;
 }
 
+// The same as morecore, but won't update nu to 4096 if it's smaller than 4k
+// Used only in pmalloc
+static Header*
+morecore1(uint nu){
+    char *p;
+    Header *hp;
+//    if (nu < 4096)
+//        nu = 4096;
+    p = sbrk(nu * sizeof(Header));
+    if (p == (char *) -1)
+        return 0;
+    hp = (Header *) p;
+    hp->s.size = nu;
+    free((void *) (hp + 1));
+    return freep;
+}
+
 void *
 malloc(uint nbytes) {
     Header *p, *prevp;
@@ -99,17 +116,17 @@ malloc(uint nbytes) {
 // Start at myproc->pgdir, allocuvm to allocate a new page
 // then,  mark it with PTE_PM
 void *pmalloc(void) {
-    uint page_index;
-
-    page_index = alloc_page_aligned();
+    //uint page_index;
+    Header* head;
+    head = morecore1(512);
 
     // try to set flags!
-    if(!set_flags(page_index, PTE_PM, 0)){
-      free((void*)page_index);
+    if(!set_flags((uint)head->s.ptr, PTE_PM, 0)){
+      free((void*)head->s.ptr);
       return 0;
     }
 
-    return (void*) page_index;
+    return (void*) head->s.ptr;
 }
 
 // #TASK1

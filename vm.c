@@ -399,13 +399,13 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz) {
     this_proc = myproc();
     pages_to_add = (PGROUNDUP(newsz) - PGROUNDUP(oldsz)) / PGSIZE;
 
-    // check if it's too many pages
-    if (this_proc->pages_in_ram + this_proc->pages_in_swap + pages_to_add >= MAX_TOTAL_PAGES) {
+    // check if it's too many pages (exclude SH and INIT)
+    if (this_proc->pages_in_ram + this_proc->pages_in_swap + pages_to_add >= MAX_TOTAL_PAGES && this_proc->pid > 2) {
         panic("Not enough pages!");
     }
 
     // pages need to be swapped!
-    if (this_proc->pages_in_ram + pages_to_add >= MAX_PSYC_PAGES) {
+    if (this_proc->pages_in_ram + pages_to_add > MAX_PSYC_PAGES) {
         pages_to_swap = 1 + this_proc->pages_in_ram + pages_to_add - MAX_PSYC_PAGES;
     }
 
@@ -441,9 +441,14 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz) {
         // Add new page to datastructue
         // register page in DSs
         this_proc->pages_in_ram++;
+        pages_to_add--;
         //if(this_proc->pid > 2){
             // Can't fail as we have enough slots
         free_page = find_empty_page_md();
+        if(free_page==0){
+            cprintf("ERROR can't find a free page meta data");
+            return newsz;
+        }
         free_page->state = MEMORY;
         free_page->page_va = (uint) mem;
         free_page->time_updated = ticks;
