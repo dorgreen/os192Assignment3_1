@@ -25,6 +25,21 @@ typedef union header Header;
 static Header base;
 static Header *freep;
 
+
+// #TASK1
+// Upon freeing, turn 'used' to 0 and reset PTE flags
+// Upon allocating, search for a node that is unused. if there is one, change PTE flags and plist flag
+// If there is no such node, use sbrk() to allocate a new page and malloc() to allocate a new node.
+typedef struct plist {
+    uint va;
+    int used;
+    struct plist* next;
+} plist;
+
+static plist* plist_head = 0;
+
+
+
 void
 free(void *ap) {
     Header *bp, *p;
@@ -53,31 +68,17 @@ morecore(uint nu) {
 
     if (nu < 4096)
         nu = 4096;
-    p = sbrk(nu * sizeof(Header));
+    // Will ONLY allocate page-alligned chunks
+    p = sbrk(PGROUNDUP(nu * sizeof(Header)) / sizeof(Header));
     if (p == (char *) -1)
         return 0;
     hp = (Header *) p;
-    hp->s.size = nu;
+    // Set the right size for this chunk
+    hp->s.size = PGROUNDUP(nu * sizeof(Header));
     free((void *) (hp + 1));
     return freep;
 }
 
-// The same as morecore, but won't update nu to 4096 if it's smaller than 4k
-// Used only in pmalloc
-static Header*
-morecore1(uint nu){
-    char *p;
-    Header *hp;
-//    if (nu < 4096)
-//        nu = 4096;
-    p = sbrk(nu * sizeof(Header));
-    if (p == (char *) -1)
-        return 0;
-    hp = (Header *) p;
-    hp->s.size = nu;
-    free((void *) (hp + 1));
-    return freep;
-}
 
 void *
 malloc(uint nbytes) {
@@ -116,17 +117,47 @@ malloc(uint nbytes) {
 // Start at myproc->pgdir, allocuvm to allocate a new page
 // then,  mark it with PTE_PM
 void *pmalloc(void) {
-    //uint page_index;
-    Header* head;
-    head = morecore1(512);
+    // Allocate first link if missing..
+    if(plist_head == 0){
+        plist_head = (plist*) malloc(sizeof(struct plist));
+        plist_head->next = 0;
+        plist_head->used = 0;
+        plist_head->va = (uint)sbrk(PGSIZE);
+    }
+
+    struct plist* free_node = plist_head;
+
+    // We're looking for an unused node
+    // If not found, allocate a node and a page for it.
+    while(free_node->used != 0){
+        // This is the last node, and all are used. allocate another!
+        if(free_node->used == 1 && free_node->next == 0){
+            // Allocate a new node, add it to the list
+            free_node->next = (plist*) malloc(sizeof(struct plist));
+            // Skip to the newly crreated node
+            free_node = free_node->next;
+            free_node->used = 0;
+            free_node->va = (uint)sbrk(PGSIZE);
+            break;
+        }
+        else{
+            free_node = free_node->next;
+        }
+    }
+
+    // By now, free_node is really free and free_node->va points to a page.
+    free_node->used = 1;
+
 
     // try to set flags!
-    if(!set_flags((uint)head->s.ptr, PTE_PM, 0)){
-      free((void*)head->s.ptr);
+    if(!set_flags(free_node->va, PTE_PM & PTE_P & PTE_U & PTE_W, 0)){
+        // If failed, mark as free and turn off PRESENT flag
+      free_node->used = 0;
+      set_flags(free_node->va, ~PTE_P, 1);
       return 0;
     }
 
-    return (void*) head->s.ptr;
+    return (void*) free_node->va;
 }
 
 // #TASK1
@@ -135,6 +166,16 @@ void *pmalloc(void) {
 // we could protect by setting the "WRITABLE" bit (bit 1) of address ( PTE_W )
 int protect_page(void* ap){
     // if pmalloc'd and start of page
+    struct plist* free_list = plist_head;
+    while(free_list != 0){
+        if(free_list->va == (uint) ap)
+            break;
+    }
+
+    // If not found on internal list, it's a dud
+    if(free_list->va != (uint) ap) return -1;
+
+    // if flag is set as allocated with PMALLOC, protect the page
     if((get_flags((uint)ap) & PTE_PM)){
         return set_flags((uint) ap, ~PTE_W, 1);
     }
@@ -145,17 +186,28 @@ int protect_page(void* ap){
 // release a protected page. return 1 upon success
 // if page is unprotected (or not a page) do nothing and return -1
 int pfree(void* ap){
+    // if pmalloc'd and start of page
+    struct plist* free_list = plist_head;
+    while(free_list != 0){
+        if(free_list->va == (uint) ap)
+            break;
+    }
+
+    // If not found on internal list, it's a dud
+    if(free_list->va != (uint) ap) return -1;
+
     // if not pmalloc'd or if not start of page
-    // TODO: is that the right way to make sure it's page alligned?
     if(!(get_flags((uint)ap) & PTE_PM) || (uint)ap != PGROUNDUP((uint) ap)){
         return -1;
     }
+
     // Clear PMALLOC flag
-    set_flags((uint)ap, ~PTE_PM, 1);
+    //set_flags((uint)ap, ~PTE_PM, 1);
+
     // Set writable flag to ON
     set_flags((uint)ap, PTE_W, 0);
-
-    free(ap);
+    // Set internal linkedlist node to free
+    free_list->used = 0;
     return 1;
 }
 
