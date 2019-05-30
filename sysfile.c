@@ -457,7 +457,7 @@ int sys_set_flags(void){
 
   return set_flags(va,flags,set);
 
-  bad:
+    bad:
   return -1;
 }
 
@@ -472,7 +472,7 @@ int sys_get_flags(void){
 
   return get_flags(va);
 
-  bad:
+    bad:
   return -1;
 
 }

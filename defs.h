@@ -9,7 +9,6 @@ struct spinlock;
 struct sleeplock;
 struct stat;
 struct superblock;
-struct page_metadata;
 
 // bio.c
 void            binit(void);
@@ -53,10 +52,10 @@ struct inode*   nameiparent(char*, char*);
 int             readi(struct inode*, char*, uint, uint);
 void            stati(struct inode*, struct stat*);
 int             writei(struct inode*, char*, uint, uint);
-int	            createSwapFile(struct proc* p);
-int	            readFromSwapFile(struct proc * p, char* buffer, uint placeOnFile, uint size);
-int	            writeToSwapFile(struct proc* p, char* buffer, uint placeOnFile, uint size);
-int	            removeSwapFile(struct proc* p);
+int		createSwapFile(struct proc* p);
+int		readFromSwapFile(struct proc * p, char* buffer, uint placeOnFile, uint size);
+int		writeToSwapFile(struct proc* p, char* buffer, uint placeOnFile, uint size);
+int		removeSwapFile(struct proc* p);
 
 // ide.c
 void            ideinit(void);
@@ -197,8 +196,7 @@ void            clearpteu(pde_t *pgdir, char *uva);
 uint            alloc_page_aligned(void);
 int             set_flags(uint, int, int);
 int             get_flags(unsigned int);
-int             page_md_free(struct page_metadata*);
-int             swap_in(uint);
+
 
 // number of elements in fixed-size array
 #define NELEM(x) (sizeof(x)/sizeof((x)[0]))

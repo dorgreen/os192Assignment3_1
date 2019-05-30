@@ -16,6 +16,7 @@ int very_simple(int pid){
         exit();
     }
     if(pid > 0){
+        sleep(50);
         printf(1, "Parent waiting on test %d\n", test_no);
         wait();
         printf(1, "Done!\n");
@@ -38,6 +39,7 @@ int simple(int pid){
         exit();
     }
     if(pid > 0){
+        sleep(50);
         printf(1, "Parent waiting on test %d\n", test_no);
         wait();
         printf(1, "Done! malloc dealloc\n");
@@ -76,6 +78,7 @@ int test_paging(int pid, int pages){
     }
 
     if(pid >  0){
+        sleep(50);
         printf(1, "Parent waiting on test %d\n", test_no);
         wait();
         printf(1, "Done! alloce'd some pages\n");
@@ -84,12 +87,98 @@ int test_paging(int pid, int pages){
     return 0;
 }
 
+int test_pmalloc(){
+    char * p = pmalloc();
+    pfree((void*) p);
+    return 0;
+}
 
+int test_pmalloc2(int pid){
+    if(pid == 0){
+        printf(1, "try palloc, lock, free...\n");
+        char* p = (char *) pmalloc();
+        p[1] = 't' ;
+        if(p[1] != 't'){
+            printf(1,"Wrong data in test_pmalloc2!\n");
+        }
+
+        printf(1, "try protect\n");
+        if(!protect_page((void*) p)){
+            printf(1,"Can't protect_pmalloc2!\n");
+            exit();
+        }
+
+        printf(1, "try free\n");
+        if(!pfree((void*) p)){
+            printf(1,"Can't pfree_pmalloc2!\n");
+            exit();
+        }
+
+        exit();
+    }
+    if(pid > 0){
+        sleep(50);
+        printf(1, "Parent waiting on test %d\n", test_no);
+        wait();
+        printf(1, "Done! malloc dealloc\n");
+        return 1;
+    }
+    return 0;
+}
+
+int test_pmalloc3(int pid){
+    if(pid == 0){
+        printf(1, "try palloc, lock, access, free...\n");
+        char* p = (char *) pmalloc();
+        p[1] = 't' ;
+        if(p[1] != 't'){
+            printf(1,"Wrong data in test_pmalloc3!\n");
+        }
+
+        if(!protect_page((void*) p)){
+            printf(1,"Can't protect_pmalloc3!\n");
+            exit();
+        }
+
+        // SHOULD BE A PAGEFAULT!!!
+        p[1] = 'e' ;
+        if(p[1] != 't'){
+            printf(1,"Succseess!! Can't write to locked data!\n");
+        }
+
+        if(!pfree((void*) p)){
+            printf(1,"Can't pfree_pmalloc3!\n");
+            exit();
+        }
+
+        exit();
+    }
+
+    if(pid > 0){
+        sleep(50);
+        printf(1, "Parent waiting on test %d\n", test_no);
+        wait();
+        printf(1, "Done! pmalloc3 (should raise PGFAULT!)\n");
+        return 1;
+    }
+    return 0;
+}
 
 int main(int argc, char *argv[]){
 
     printf(1, "--------- START TESTING! ---------\n");
 
+    printf(1, "------- test%d -------\n", test_no);
+    test_pmalloc();
+    test_no++;
+
+    printf(1, "------- test%d -------\n", test_no);
+    test_pmalloc2(fork());
+    test_no++;
+
+    printf(1, "------- test%d -------\n", test_no);
+    test_pmalloc3(fork());
+    test_no++;
 
     printf(1, "------- test%d -------\n", test_no);
     very_simple(fork());

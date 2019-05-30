@@ -108,7 +108,6 @@ extern int sys_alloc_page_aligned(void);
 extern int sys_set_flags(void);
 extern int sys_get_flags(void);
 
-
 static int (*syscalls[])(void) = {
 [SYS_fork]    sys_fork,
 [SYS_exit]    sys_exit,
@@ -133,9 +132,8 @@ static int (*syscalls[])(void) = {
 [SYS_close]   sys_close,
 [SYS_yield]   sys_yield,
 [SYS_alloc_page_aligned]   sys_alloc_page_aligned,
-[SYS_set_flags] sys_set_flags,
-[SYS_get_flags] sys_get_flags,
-
+[SYS_set_flags]            sys_set_flags,
+[SYS_get_flags]            sys_get_flags,
 };
 
 void
