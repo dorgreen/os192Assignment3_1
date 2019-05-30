@@ -74,7 +74,7 @@ morecore(uint nu) {
         return 0;
     hp = (Header *) p;
     // Set the right size for this chunk
-    hp->s.size = PGROUNDUP(nu * sizeof(Header));
+    hp->s.size = PGROUNDUP(nu * sizeof(Header)) / sizeof(Header);
     free((void *) (hp + 1));
     return freep;
 }
