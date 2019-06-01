@@ -147,12 +147,14 @@ int reset_page_md(void *va) {
   }
   if (page->state == MEMORY) {
     myproc()->pages_in_ram--;
-    // TODO: MAYBE ALSO KFREE?
+    // this function dosen't deal with data, only metadata. rely on programmer to free the memory :)
   }
+
   if (page->state == SWAP) {
     myproc()->pages_in_swap--;
-    // TODO: MAYBE ALSO REMOVE FROM SWAP?
+    // probably no need to reset the data in swapfile as it will be overwritten
   }
+
   page->time_updated = -1;
   page->state = UNUSED;
   page->page_va = -1;
@@ -487,16 +489,24 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz) {
 // process size.  Returns the new process size.
 int
 deallocuvm(pde_t *pgdir, uint oldsz, uint newsz) {
-  pte_t *pte;
+  // TODO: SHOULD REFACTOR TO INCLUDE proc PARAMETER or my implementation of this_proc good enough?
+
+    pte_t *pte;
   uint a;
+  struct proc* this_proc;
 
   if (newsz >= oldsz)
     return oldsz;
 
   a = PGROUNDUP(newsz);
 
+  this_proc = myproc();
+
   // go after pages to be removed...
   for (; a < oldsz; a += PGSIZE) {
+
+      // if we're walking our own pagedir, better update data structures..
+
     pte = walkpgdir(pgdir, (char *) a, 0);
 
     if (!pte) {
@@ -505,15 +515,25 @@ deallocuvm(pde_t *pgdir, uint oldsz, uint newsz) {
     }
 
 
-    // If it's paged out no need to free it, but pointer should be removed
-    // If it's present, now it's not :)
-    if(pte && (*pte & PTE_PG || *pte & PTE_P)){
+
+    // if it's not free it
+    else if((*pte & PTE_P)  && ((*pte & PTE_PG) == 0)){
       // remove pte from swapping DSs
-      //page_md_free(find_page_md((void*)a)); // TODO UNCOMMENT
-      reset_page_md((void*) a); // TODO UNCOMMENT
+        if(pgdir == this_proc->pgdir){
+            page_md_free(find_page_md((void*)a)); // TODO UNCOMMENT
+            reset_page_md((void*) a); // TODO UNCOMMENT
+        }
       *pte = 0;
     }
+        // paged out!
+    else if(((*pte & PTE_P) == 0) && (*pte & PTE_PG)){
+        *pte = 0;
+        if(pgdir == this_proc->pgdir){
+            reset_page_md((void*)a);
+        }
+    }
   }
+
   lcr3(V2P(myproc()->pgdir));
   return newsz;
 }
