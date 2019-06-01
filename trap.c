@@ -78,37 +78,23 @@ trap(struct trapframe *tf)
     lapiceoi();
     break;
 
-
     case T_PGFLT:
-        if(myproc()->pid > 2){
-            // TODO: TASK4: add to pagefault counter
-            // TASK1: Fail with exit code 13 if it's locked
-            if(PM_LOCKED(get_flags(PGROUNDDOWN(rcr2())))){
-                tf->eax = T_GPFLT;
-            }
-            // TASK2: check if we got TRAP14 because it was paged' out.
-            //        if it was paged' out, swap it in and continue without trapping
-            if(PAGEDOUT(get_flags(PGROUNDDOWN(rcr2()))) && swap_in(PGROUNDDOWN(rcr2())) > 0){
-                // Page was swapped in succssfully, continue
-                // TODO: HOW TO CONITINUE>?!?!!?!!?!?!!?
-                return;
-            }
+      if(myproc()->pid > 2){
+        // TODO: TASK4: add to pagefault counter
+        // TASK1: Fail with exit code 13 if it's locked
+        if(PM_LOCKED(get_flags(PGROUNDDOWN(rcr2())))){
+          tf->eax = T_GPFLT;
         }
+        // TASK2: check if we got TRAP14 because it was paged' out.
+        //        if it was paged' out, swap it in and continue without trapping
+        if(PAGEDOUT(get_flags(PGROUNDDOWN(rcr2()))) && swap_in(PGROUNDDOWN(rcr2())) > 0){
+          // Page was swapped OUT. page it in.
+          swap_in(PGROUNDDOWN(rcr2()));
+          break;
+        }
+      }
           // NO BREAK! CONTINUE TO DEFAULT CASE IF NEEDED
 
-//    addr = rcr2();
-//    vaddr = &proc->pgdir[PDX(addr)];
-//    // cprintf("addr:0x%x vaddr:0x%x PDX:0x%x PTX:0x%x FLAGS:0x%x\n", addr, vaddr, PDX(*vaddr),PTX(*vaddr),PTE_FLAGS(*vaddr)); //TODO delete
-//    // cprintf("&PTE_PG:%x &PTE_P:%x\n", (((uint*)PTE_ADDR(P2V(*vaddr)))[PTX(addr)] & PTE_PG), ((((uint*)PTE_ADDR(P2V(*vaddr)))[PTX(addr)] & PTE_P))); //TODO delete
-//    if (((int)(*vaddr) & PTE_P) != 0) { // if page table isn't present at page directory -> hard page fault
-//      if (((uint*)PTE_ADDR(P2V(*vaddr)))[PTX(addr)] & PTE_PG) { // if the page is in the process's swap file
-//        // cprintf("page is in swap file, pid %d, va %p\n", proc->pid, addr); //TODO delete
-//        swapPages(PTE_ADDR(addr));
-//        ++proc->totalPageFaultCount;
-//        // cprintf("proc->totalPageFaultCount:%d\n", ++proc->totalPageFaultCount);//TODO delete
-//        return;
-//      }
-//    }
 
           //PAGEBREAK: 13
   default:

@@ -38,10 +38,10 @@ struct cpu*
 mycpu(void)
 {
   int apicid, i;
-
+  
   if(readeflags()&FL_IF)
     panic("mycpu called with interrupts enabled\n");
-
+  
   apicid = lapicid();
   // APIC IDs are not guaranteed to be contiguous. Maybe we should have
   // a reverse map, or reserve a register to store &cpus[i].
@@ -112,6 +112,9 @@ found:
   memset(p->context, 0, sizeof *p->context);
   p->context->eip = (uint)forkret;
 
+  if(p->pid > 2){createSwapFile(p);}
+
+
   return p;
 }
 
@@ -124,7 +127,7 @@ userinit(void)
   extern char _binary_initcode_start[], _binary_initcode_size[];
 
   p = allocproc();
-
+  
   initproc = p;
   if((p->pgdir = setupkvm()) == 0)
     panic("userinit: out of memory?");
@@ -203,57 +206,58 @@ fork(void)
   // Clear %eax so that fork returns 0 in the child.
   np->tf->eax = 0;
 
-  for(i = 0; i < NOFILE; i++)
+  for(i = 0; i < NOFILE; i++){
     if(curproc->ofile[i])
       np->ofile[i] = filedup(curproc->ofile[i]);
+  }
+
   np->cwd = idup(curproc->cwd);
 
   safestrcpy(np->name, curproc->name, sizeof(curproc->name));
 
+  // --- handle paging data ----
+
+  // Copy page-related metadata
+  np->pages_in_swap = curproc->pages_in_swap;
+  np->pages_in_ram = curproc->pages_in_ram;
+
+
+  // deep copy everything
+  // create swap if np->pid > 2
+  // if curproc->pid > 2 also deep copy the swap file
+
+  if(np->pid > 2){
+    if(curproc->pid > 2){
+      // deep copy the swapfile data
+      if (curproc->swapFile != 0) {
+        char buf[2048];
+        for (int i = 0; i < (MAX_TOTAL_PAGES - 1) * PGSIZE; i += 2048) {
+          readFromSwapFile(curproc, buf, i, 2048);
+          writeToSwapFile(np, buf, i, 2048);
+        }
+      }
+    }
+  }
+
+
+  // deep copy pages metadata
+  for (int i = 0; i < MAX_TOTAL_PAGES; i++) {
+    np->pages[i] = curproc->pages[i];
+    // UPDATE PAGEDIR!!!!
+    np->pages[i].pgdir = np->pgdir;
+  }
+
+  // deep copy swapfile mappings (assuming no data to be copied on sh and init)
+  for (int i = 0; i < MAX_PSYC_PAGES; i++) {
+    if (curproc->swap_spots[i] == 0) {
+      np->swap_spots[i] = 0;
+    } else {
+      // update pointer relatively
+      np->swap_spots[i] = curproc->swap_spots[i] - curproc->swap_spots[0] + np->swap_spots[0];
+    }
+  }
+
   pid = np->pid;
-
-  // init and sh procs have no swap file, create a new for the new proc
-  if(np->pid < 2){
-    //curproc->pages_in_swap = 0;
-    //curproc->pages_in_ram = 0;
-    struct page_metadata* pgmd;
-    for(int i = 0; i < MAX_TOTAL_PAGES; i++){
-      pgmd = &np->pages[i];
-      pgmd->state = PAGE_UNUSED;
-      pgmd->time_updated = -1;
-      pgmd->page_va = -1;
-    }
-  }
-  else{ // new proc is NOT sh or init, the common case...
-    createSwapFile(np);
-    // deep copy DSs
-      for(int i = 0 ; i < MAX_TOTAL_PAGES ; i++){
-          np->pages[i] = curproc->pages[i];
-      }
-
-    // deep copy the swapfile
-    if(curproc->swapFile != 0){
-      char buf[2048];
-      for(int i = 0; i < (MAX_TOTAL_PAGES - 1) * PGSIZE; i += 2048){
-        readFromSwapFile(curproc,buf,i,2048);
-        writeToSwapFile(np,buf,i,2048);
-      }
-    }
-
-    // deep copy swapfile mappings
-    for(int i = 0 ; i < MAX_PSYC_PAGES; i++){
-      if(curproc->swap_spots[i] == 0){
-        np->swap_spots[i] = 0;
-      }
-      else{
-        // update pointer relatively
-        np->swap_spots[i] = curproc->swap_spots[i] - curproc->swap_spots[0] + np->swap_spots[0];
-      }
-    }
-  }
-
-  np->pages_in_ram = curproc-> pages_in_ram;
-  np->pages_in_swap = curproc-> pages_in_swap;
 
   acquire(&ptable.lock);
 
@@ -290,6 +294,7 @@ exit(void)
   end_op();
   curproc->cwd = 0;
 
+
   removeSwapFile(curproc);
 
   acquire(&ptable.lock);
@@ -306,24 +311,6 @@ exit(void)
     }
   }
 
-  // Reset all DSs for this proc (just a precausion)
-  struct page_metadata* pgmd;
-  for(int i = 0; i < MAX_TOTAL_PAGES; i++){
-    pgmd = &curproc->pages[i];
-      // FREE THE PAGES!
-    page_md_free(pgmd);
-    pgmd->state = PAGE_UNUSED;
-    pgmd->time_updated = -1;
-    pgmd->page_va = -1;
-  }
-  for(int i = 0 ; i < MAX_PSYC_PAGES; i++){
-    curproc->swap_spots[i] = 0;
-  }
-  curproc->pages_in_swap = 0;
-  curproc->pages_in_ram = 0;
-
-
-
   // Jump into the scheduler, never to return.
   curproc->state = ZOMBIE;
   sched();
@@ -338,7 +325,7 @@ wait(void)
   struct proc *p;
   int havekids, pid;
   struct proc *curproc = myproc();
-
+  
   acquire(&ptable.lock);
   for(;;){
     // Scan through table looking for exited children.
@@ -358,6 +345,19 @@ wait(void)
         p->name[0] = 0;
         p->killed = 0;
         p->state = UNUSED;
+          // clean paging metadata
+        for(int i = 0 ; i < MAX_TOTAL_PAGES ; i++){
+            p->pages[i].pgdir = 0;
+            p->pages[i].offset = 0;
+            p->pages[i].state = UNUSED;
+            p->pages[i].time_updated = -1;
+        }
+
+        for(int i = 0 ; i < MAX_PSYC_PAGES ; i++){
+            p->swap_spots[i] = 0;
+        }
+        p->pages_in_ram = 0;
+        p->pages_in_swap = 0;
         release(&ptable.lock);
         return pid;
       }
@@ -388,7 +388,7 @@ scheduler(void)
   struct proc *p;
   struct cpu *c = mycpu();
   c->proc = 0;
-
+  
   for(;;){
     // Enable interrupts on this processor.
     sti();
@@ -481,7 +481,7 @@ void
 sleep(void *chan, struct spinlock *lk)
 {
   struct proc *p = myproc();
-
+  
   if(p == 0)
     panic("sleep");
 

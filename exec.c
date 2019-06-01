@@ -38,8 +38,26 @@ exec(char *path, char **argv)
   if((pgdir = setupkvm()) == 0)
     goto bad;
 
-  // Load program into memory.
+  // before loading program into memory reset metadata
   sz = 0;
+  for(int i = 0 ; i < MAX_TOTAL_PAGES ; i++){
+      struct page_metadata* pgmd = &curproc->pages[i];
+      pgmd->page_va = -1;
+      pgmd->time_updated = -1;
+      pgmd->state = UNUSED;
+      pgmd->offset = -1;
+      pgmd->pgdir = 0;
+  }
+
+  for(int i = 0 ; i < MAX_PSYC_PAGES ; i++){
+      curproc->swap_spots[i] = 0;
+  }
+
+  curproc->pages_in_swap = 0;
+  curproc->pages_in_ram = 0;
+
+
+  // Load program into memory.
   for(i=0, off=elf.phoff; i<elf.phnum; i++, off+=sizeof(ph)){
     if(readi(ip, (char*)&ph, off, sizeof(ph)) != sizeof(ph))
       goto bad;
@@ -95,6 +113,11 @@ exec(char *path, char **argv)
 
   // Commit to the user image.
   oldpgdir = curproc->pgdir;
+  // update metadata for new pgdir
+  for(int i = 0 ; i< MAX_TOTAL_PAGES ; i++){
+    curproc->pages[i].pgdir = pgdir;
+  }
+
   curproc->pgdir = pgdir;
   curproc->sz = sz;
   curproc->tf->eip = elf.entry;  // main

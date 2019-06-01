@@ -9,6 +9,7 @@
 
 extern char data[];  // defined by kernel.ld
 pde_t *kpgdir;  // for use in scheduler()
+char swap_buff[PGSIZE];
 
 // Set up CPU's kernel segment descriptors.
 // Run once on entry on each CPU.
@@ -113,6 +114,187 @@ static struct kmap {
  { (void*)data,     V2P(data),     PHYSTOP,   PTE_W}, // kern data+memory
  { (void*)DEVSPACE, DEVSPACE,      0,         PTE_W}, // more devices
 };
+
+
+// find a page with that address
+struct page_metadata *find_page_md(void *va) {
+  struct proc *this_proc = myproc();
+  for (int i = 0; i < MAX_TOTAL_PAGES; i++) {
+    if (this_proc->pages[i].page_va == (uint) va) {
+      return &this_proc->pages[i];
+    }
+  }
+  return 0;
+}
+
+
+struct page_metadata *find_empty_page_md(void) {
+  struct proc *this_proc = myproc();
+  for (int i = 0; i < MAX_TOTAL_PAGES; i++) {
+    if (this_proc->pages[i].state == PAGE_UNUSED) {
+      return &this_proc->pages[i];
+    }
+  }
+  return 0;
+}
+
+
+// remove the page from our DSs
+int reset_page_md(void *va) {
+  struct page_metadata *page = find_page_md(va);
+  if (page == 0) {
+    return -1;
+  }
+  if (page->state == MEMORY) {
+    myproc()->pages_in_ram--;
+    // TODO: MAYBE ALSO KFREE?
+  }
+  if (page->state == SWAP) {
+    myproc()->pages_in_swap--;
+    // TODO: MAYBE ALSO REMOVE FROM SWAP?
+  }
+  page->time_updated = -1;
+  page->state = UNUSED;
+  page->page_va = -1;
+  return 1;
+}
+
+// return INDEX in swapfile
+int find_place_in_swap(void){
+  struct proc* this_proc = myproc();
+  for(int i = 0 ; i < MAX_PSYC_PAGES ; i++){
+    if(this_proc->swap_spots[i] == 0){
+      return i;
+    }
+  }
+  return -1;
+}
+
+// If in MEMORY, free it.
+// WONT UPDATE ANY DATA STRUCTURES!!!!!!!!!!!!!!
+int page_md_free(struct page_metadata* pgmd){
+  if(pgmd == 0)
+    return -1;
+  uint pa;
+  if(pgmd->state == MEMORY){
+    pte_t* pte = walkpgdir(myproc()->pgdir, (void*)pgmd->page_va, 0);
+    if(pte == 0) panic("Swapping a virtual address that has no physical address!!");
+
+    if ((*pte & PTE_P) != 0) {
+      pa = PTE_ADDR(*pte);
+      if (pa == 0)
+        panic("kfree");
+      char *v = P2V(pa);
+      kfree(v);
+    }
+    else return -1;
+    lcr3(V2P(myproc()->pgdir));
+    return 1;
+  }
+  return -1;
+}
+
+
+int swap_out(void){
+  // TODO: ADD POLICIES!
+  struct proc* this_proc;
+  int page_md_index = 0; // The index of the selected page to swap
+  this_proc = myproc();
+
+  // LIFO:
+  uint oldest = ~0; // THE LAREGEST UINT!!!!!
+  struct page_metadata* to_swap = 0;
+  for(page_md_index = 0 ; page_md_index < MAX_TOTAL_PAGES ; page_md_index++){
+    if(this_proc->pages[page_md_index].state == MEMORY && this_proc->pages[page_md_index].time_updated < oldest){
+      oldest = this_proc->pages[page_md_index].time_updated;
+      to_swap = &this_proc->pages[page_md_index];
+    }
+  }
+
+  //SCFIFO
+  // TODO: add code that selects page_metadata entry according to SCFIFO and puts it in to_swap
+
+
+
+  // COMMON CODE:
+  if(to_swap == 0) return -1;
+
+  int swapfile_index = find_place_in_swap();
+  if(swapfile_index < 0 )
+    panic("No place in swap!");
+
+  // Mark this spot in swapfile as taken by this page
+  this_proc->swap_spots[swapfile_index] = to_swap;
+  to_swap->offset = swapfile_index*PGSIZE;
+
+  // WRITE FROM PHY-ADDR
+  // find the physical address of page_va witin to_swap->pgdir
+
+  pte_t *pte = walkpgdir(to_swap->pgdir,(void*)to_swap->page_va,0);
+  uint phy_addr = PTE_ADDR(*pte);
+
+  writeToSwapFile(this_proc, (char*)phy_addr, to_swap->offset, PGSIZE);
+
+  if(page_md_free(to_swap) == -1)
+    return -1;
+
+  // Set PTE_PG FLAG!
+  set_flags(to_swap->page_va, PTE_PG, 0);
+  // Clear PTE_P FLAG!
+  set_flags(to_swap->page_va, ~PTE_P, 1);
+  lcr3(V2P(this_proc->pgdir));
+
+  to_swap->time_updated = -1;
+  to_swap->state = SWAP;
+  to_swap->pgdir = this_proc->pgdir; // So that we know to which memory space to map it back to
+  this_proc->pages_in_swap++;
+  this_proc->pages_in_ram--;
+  return 1;
+}
+
+int swap_in(uint va){
+  struct proc* this_proc;
+  struct page_metadata* pgmd;
+  char* new_page;
+
+  this_proc = myproc();
+  pgmd = find_page_md((void*)va);
+  if(pgmd == 0) return -1;
+
+  // check if it's too many pages
+  if (this_proc->pages_in_ram + this_proc->pages_in_swap + 1 >= MAX_TOTAL_PAGES) {
+    return -1;
+  }
+
+  // a page needs to be swapped out for this new one to fit!
+  if (this_proc->pages_in_ram + 1 >= MAX_PSYC_PAGES) {
+    if(swap_out() == -1)
+      return -1;
+    lcr3(V2P(this_proc->pgdir));
+  }
+
+  // By now, there is a free physical page for this page!
+  readFromSwapFile(this_proc, swap_buff, pgmd->offset, PGSIZE);
+  // copy from buff to newly-allocated page
+  new_page = kalloc();
+  memmove((void*) va, (void*)swap_buff, PGSIZE);
+
+
+  // update that the spot in swap is free
+  // Mark as present and NOT PG
+  set_flags(pgmd->page_va, PTE_P, 0);
+  set_flags(pgmd->page_va, ~PTE_PG, 1);
+  set_flags(pgmd->page_va, (int)new_page, 0); // ACTUALLY MAP va->new_page
+
+  // update metadata
+  pgmd->state = MEMORY;
+  this_proc->swap_spots[pgmd->offset/PGSIZE] = 0;
+  pgmd->time_updated = ticks;
+  this_proc->pages_in_ram++;
+  this_proc->pages_in_swap--;
+
+  return 1;
+}
 
 // Set up kernel part of a page table.
 pde_t*
@@ -224,8 +406,8 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz) {
   uint a;
   struct proc *this_proc;
   int pages_to_add;
-  //int pages_to_swap = 0;
-  //struct page_metadata *free_page;
+  int pages_to_swap = 0;
+  struct page_metadata *free_page;
 
   if (newsz >= KERNBASE)
     return 0;
@@ -244,25 +426,21 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz) {
     panic("Not enough pages!");
   }
 
-    // TODO UNCOMMENT
-//  // pages need to be swapped!
-//  if (this_proc->pages_in_ram + pages_to_add > MAX_PSYC_PAGES) {
-//    pages_to_swap = 1 + this_proc->pages_in_ram + pages_to_add - MAX_PSYC_PAGES;
-//  }
+  // pages need to be swapped!
+  if (this_proc->pages_in_ram + pages_to_add > MAX_PSYC_PAGES) {
+    pages_to_swap = 1 + this_proc->pages_in_ram + pages_to_add - MAX_PSYC_PAGES;
+  }
 
   for (; a < newsz; a += PGSIZE) {
     // Swap them pages out!
-    // If we're in INIT or SH no need to keep track...
-    // TODO UNCOMMENT
-//    if (this_proc->pid > 2) {
-//      if (pages_to_swap > 0) {
-//        swap_out(); // also updates proc->pages_in_ram ; proc->pages_in_swap AND frees the page from RAM!
-//        lcr3(V2P(this_proc->pgdir));
-//        pages_to_swap--;
-//      }
-//    }
-
-
+    // If we're in INIT or SH no need swap out...
+    if (this_proc->pid > 2) {
+      if (pages_to_swap > 0) {
+        swap_out(); // also updates proc->pages_in_ram ; proc->pages_in_swap AND frees the page from RAM!
+        lcr3(V2P(this_proc->pgdir));
+        pages_to_swap--;
+      }
+    }
 
     mem = kalloc();
 
@@ -279,27 +457,30 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz) {
       kfree(mem);
       return 0;
     }
-// TODO UNCOMMENT
-//    // Add new page to datastructue
-//    // register page in DSs
-//    this_proc->pages_in_ram++;
-//    pages_to_add--;
-//    //if(this_proc->pid > 2){
-//    // Can't fail as we have enough slots
-//    free_page = find_empty_page_md();
-//    if(free_page==0){
-//      cprintf("ERROR can't find a free page meta data");
-//      return newsz;
-//    }
-//    free_page->state = MEMORY;
-//    free_page->page_va = (uint) mem;
-//    free_page->time_updated = ticks;
-//    free_page->offset = 0;
-    // }
+
+    // Add new page to datastructue
+    // register page in DSs
+    this_proc->pages_in_ram++;
+    pages_to_add--;
+    //if(this_proc->pid > 2){
+    // Can't fail as we have enough slots
+    free_page = find_empty_page_md();
+    if (free_page == 0) {
+      cprintf("ERROR can't find a free page meta data");
+      return newsz;
+    }
+    free_page->state = MEMORY;
+    free_page->page_va = (uint) mem;
+    free_page->time_updated = ticks;
+    free_page->offset = 0;
   }
+
   lcr3(V2P(myproc()->pgdir));
   return newsz;
 }
+
+
+
 // Deallocate user pages to bring the process size from oldsz to
 // newsz.  oldsz and newsz need not be page-aligned, nor does newsz
 // need to be less than oldsz.  oldsz can be larger than the actual
@@ -318,20 +499,22 @@ deallocuvm(pde_t *pgdir, uint oldsz, uint newsz) {
   for (; a < oldsz; a += PGSIZE) {
     pte = walkpgdir(pgdir, (char *) a, 0);
 
-    if (!pte) // if these is no data, just skip TODO: if page was page-swapped????
-      a += (NPTENTRIES - 1) * PGSIZE; //PGADDR(PDX(a) + 1, 0, 0) - PGSIZE;
+    if (!pte) {
+        // if these is no data, just skip TODO: if page was page-swapped????
+        a += (NPTENTRIES - 1) * PGSIZE; //PGADDR(PDX(a) + 1, 0, 0) - PGSIZE;
+    }
 
 
-    // remove pte from swapping DSs
-    //page_md_free(find_page_md((void*)a)); // TODO UNCOMMENT
-   // reset_page_md((void*) a); // TODO UNCOMMENT
     // If it's paged out no need to free it, but pointer should be removed
     // If it's present, now it's not :)
     if(pte && (*pte & PTE_PG || *pte & PTE_P)){
+      // remove pte from swapping DSs
+      //page_md_free(find_page_md((void*)a)); // TODO UNCOMMENT
+      reset_page_md((void*) a); // TODO UNCOMMENT
       *pte = 0;
     }
   }
-    lcr3(V2P(myproc()->pgdir));
+  lcr3(V2P(myproc()->pgdir));
   return newsz;
 }
 

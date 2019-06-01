@@ -196,6 +196,7 @@ void            clearpteu(pde_t *pgdir, char *uva);
 uint            alloc_page_aligned(void);
 int             set_flags(uint, int, int);
 int             get_flags(unsigned int);
+int             swap_in(uint);
 
 
 // number of elements in fixed-size array
