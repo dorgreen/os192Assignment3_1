@@ -61,7 +61,7 @@ struct proc {
     struct inode *cwd;           // Current directory
     char name[16];               // Process name (debugging)
 
-    // TODO: probably should add some paging meta-data to know know which pages
+    // some paging meta-data to know which pages
     // are in the process' swap file and where they are located in that file
     // #TASK2.1
 

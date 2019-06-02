@@ -52,25 +52,27 @@ int simple(int pid){
 int test_paging(int pid, int pages){
     if(pid == 0){
         int size = pages;
-        char* pp[size];
+        char* page;
         for(int i = 0 ; i < size ; i++){
             printf(1, "Call %d for sbrk\n", i);
-            pp[i] = sbrk(PGSIZE-1);
-            *pp[i] = '0' +(char) i ;
+            page = sbrk(PGSIZE);
+            printf(1, "ok %d\n", i);
+            printf(1, "page addr: %x\n", (uint)page);
+            //*page = '0' +(char) i ;
         }
-        printf(1, "try accessing this data...\n");
-
-        if(size > 4 && *pp[4] != '4'){
-            printf(1,"Wrong data in pp[4]! %c\n", *pp[4]);
-        }
-
-        if(*pp[0] != '0'){
-            printf(1,"Wrong data in pp[0]! %c\n", *pp[0]);
-        }
-
-        if(*pp[size-1] != '0' +(char) size-1 ){
-            printf(1,"Wrong data in pp[size-1]! %c\n", *pp[size-1]);
-        }
+//        printf(1, "try accessing this data...\n");
+//
+//        if(size > 4 && *pp[4] != '4'){
+//            printf(1,"Wrong data in pp[4]! %c\n", *pp[4]);
+//        }
+//
+//        if(*pp[0] != '0'){
+//            printf(1,"Wrong data in pp[0]! %c\n", *pp[0]);
+//        }
+//
+//        if(*pp[size-1] != '0' +(char) size-1 ){
+//            printf(1,"Wrong data in pp[size-1]! %c\n", *pp[size-1]);
+//        }
 
         printf(1, "Done allocing, exiting...\n");
         exit();
@@ -167,19 +169,19 @@ int test_pmalloc3(int pid){
 int main(int argc, char *argv[]){
 
     printf(1, "--------- START TESTING! ---------\n");
-
-    printf(1, "------- test%d -------\n", test_no);
-    test_pmalloc();
-    test_no++;
-
-    printf(1, "------- test%d -------\n", test_no);
-    test_pmalloc2(fork());
-    test_no++;
-
-    printf(1, "------- test%d -------\n", test_no);
-    test_pmalloc3(fork());
-    test_no++;
-
+//
+//    printf(1, "------- test%d -------\n", test_no);
+//    test_pmalloc();
+//    test_no++;
+//
+//    printf(1, "------- test%d -------\n", test_no);
+//    test_pmalloc2(fork());
+//    test_no++;
+//
+//    printf(1, "------- test%d -------\n", test_no);
+//    test_pmalloc3(fork());
+//    test_no++;
+//
     printf(1, "------- test%d -------\n", test_no);
     very_simple(fork());
     test_no++;

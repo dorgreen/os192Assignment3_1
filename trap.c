@@ -13,6 +13,7 @@ struct gatedesc idt[256];
 extern uint vectors[];  // in vectors.S: array of 256 entry pointers
 struct spinlock tickslock;
 uint ticks;
+uint bad_addr;
 
 void
 tvinit(void)
@@ -79,17 +80,20 @@ trap(struct trapframe *tf)
     break;
 
     case T_PGFLT:
+        bad_addr = rcr2();
       if(myproc()->pid > 2){
         // TODO: TASK4: add to pagefault counter
         // TASK1: Fail with exit code 13 if it's locked
-        if(PM_LOCKED(get_flags(PGROUNDDOWN(rcr2())))){
+        if(PM_LOCKED(get_flags(PGROUNDDOWN(bad_addr)))){
+            cprintf("access locked page!\n"); //TODO DEBUG ONLY
           tf->eax = T_GPFLT;
         }
         // TASK2: check if we got TRAP14 because it was paged' out.
         //        if it was paged' out, swap it in and continue without trapping
-        if(PAGEDOUT(get_flags(PGROUNDDOWN(rcr2()))) && swap_in(PGROUNDDOWN(rcr2())) > 0){
+        if(PAGEDOUT(get_flags(PGROUNDDOWN(bad_addr)))){
           // Page was swapped OUT. page it in.
-          swap_in(PGROUNDDOWN(rcr2()));
+          cprintf("Pagedout! trap trying to page it in...!\n"); //TODO DEBUG ONLY
+          swap_in(PGROUNDDOWN(bad_addr));
           break;
         }
       }

@@ -193,7 +193,7 @@ fork(void)
   }
 
   // Copy process state from proc.
-  if((np->pgdir = copyuvm(curproc->pgdir, curproc->sz)) == 0){
+  if((np->pgdir = copyuvm(curproc->pgdir, curproc->sz, np)) == 0){
     kfree(np->kstack);
     np->kstack = 0;
     np->state = UNUSED;
@@ -217,9 +217,9 @@ fork(void)
 
   // --- handle paging data ----
 
-  // Copy page-related metadata
-  np->pages_in_swap = curproc->pages_in_swap;
-  np->pages_in_ram = curproc->pages_in_ram;
+  // Copy page-related metadata (no need, updated by copyuvm)
+  //np->pages_in_swap = curproc->pages_in_swap;
+  //np->pages_in_ram = curproc->pages_in_ram;
 
 
   // deep copy everything
@@ -240,12 +240,12 @@ fork(void)
   }
 
 
-  // deep copy pages metadata
-  for (int i = 0; i < MAX_TOTAL_PAGES; i++) {
-    np->pages[i] = curproc->pages[i];
-    // UPDATE PAGEDIR!!!!
-    np->pages[i].pgdir = np->pgdir;
-  }
+//  // deep copy pages metadata
+//  for (int i = 0; i < MAX_TOTAL_PAGES; i++) {
+//    np->pages[i] = curproc->pages[i];
+//    // UPDATE PAGEDIR!!!!
+//    np->pages[i].pgdir = np->pgdir;
+//  }
 
   // deep copy swapfile mappings (assuming no data to be copied on sh and init)
   for (int i = 0; i < MAX_PSYC_PAGES; i++) {

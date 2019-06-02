@@ -9,7 +9,6 @@
 
 extern char data[];  // defined by kernel.ld
 pde_t *kpgdir;  // for use in scheduler()
-char swap_buff[PGSIZE];
 
 // Set up CPU's kernel segment descriptors.
 // Run once on entry on each CPU.
@@ -232,18 +231,20 @@ int swap_out(void){
   // WRITE FROM PHY-ADDR
   // find the physical address of page_va witin to_swap->pgdir
 
-  pte_t *pte = walkpgdir(to_swap->pgdir,(void*)to_swap->page_va,0);
-  uint phy_addr = PTE_ADDR(*pte);
+  pte_t *pte = walkpgdir(this_proc->pgdir,(void*)to_swap->page_va,0);
+  uint flags = PTE_FLAGS(*pte);
 
-  writeToSwapFile(this_proc, (char*)phy_addr, to_swap->offset, PGSIZE);
+  writeToSwapFile(this_proc, (char*) P2V(PTE_ADDR(*pte)), to_swap->offset, PGSIZE);
+    // handles kfree etc
+  if(page_md_free(to_swap) == -1){
+      return -1;
+  }
 
-  if(page_md_free(to_swap) == -1)
-    return -1;
+  // reset address, set flags
+  *pte = 0 | flags | PTE_PG;
+  *pte &= ~PTE_P;
 
-  // Set PTE_PG FLAG!
-  set_flags(to_swap->page_va, PTE_PG, 0);
-  // Clear PTE_P FLAG!
-  set_flags(to_swap->page_va, ~PTE_P, 1);
+
   lcr3(V2P(this_proc->pgdir));
 
   to_swap->time_updated = -1;
@@ -275,18 +276,27 @@ int swap_in(uint va){
     lcr3(V2P(this_proc->pgdir));
   }
 
+    // allocate a new page in memory to put the swapped data in
+    new_page = kalloc();
+    if(new_page == 0){
+        panic("No memory to swap in to");
+    }
+    memset(new_page,0 ,PGSIZE);
+
   // By now, there is a free physical page for this page!
-  readFromSwapFile(this_proc, swap_buff, pgmd->offset, PGSIZE);
-  // copy from buff to newly-allocated page
-  new_page = kalloc();
-  memmove((void*) va, (void*)swap_buff, PGSIZE);
+  if(readFromSwapFile(this_proc, new_page, pgmd->offset, PGSIZE) == -1){
+      panic("can't read from swap!");
+  }
+
 
 
   // update that the spot in swap is free
   // Mark as present and NOT PG
   set_flags(pgmd->page_va, PTE_P, 0);
   set_flags(pgmd->page_va, ~PTE_PG, 1);
-  set_flags(pgmd->page_va, (int)new_page, 0); // ACTUALLY MAP va->new_page
+
+    // map the physical memory to virtual
+    mappages(this_proc->pgdir, (void*)pgmd->page_va, PGSIZE, V2P(new_page), PTE_W|PTE_U);
 
   // update metadata
   pgmd->state = MEMORY;
@@ -472,7 +482,7 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz) {
       return newsz;
     }
     free_page->state = MEMORY;
-    free_page->page_va = (uint) mem;
+    free_page->page_va = (uint) a;
     free_page->time_updated = ticks;
     free_page->offset = 0;
   }
@@ -489,7 +499,6 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz) {
 // process size.  Returns the new process size.
 int
 deallocuvm(pde_t *pgdir, uint oldsz, uint newsz) {
-  // TODO: SHOULD REFACTOR TO INCLUDE proc PARAMETER or my implementation of this_proc good enough?
 
     pte_t *pte;
   uint a;
@@ -510,7 +519,7 @@ deallocuvm(pde_t *pgdir, uint oldsz, uint newsz) {
     pte = walkpgdir(pgdir, (char *) a, 0);
 
     if (!pte) {
-        // if these is no data, just skip TODO: if page was page-swapped????
+        // if these is no data, just skip
         a += (NPTENTRIES - 1) * PGSIZE; //PGADDR(PDX(a) + 1, 0, 0) - PGSIZE;
     }
 
@@ -520,8 +529,8 @@ deallocuvm(pde_t *pgdir, uint oldsz, uint newsz) {
     else if((*pte & PTE_P)  && ((*pte & PTE_PG) == 0)){
       // remove pte from swapping DSs
         if(pgdir == this_proc->pgdir){
-            page_md_free(find_page_md((void*)a)); // TODO UNCOMMENT
-            reset_page_md((void*) a); // TODO UNCOMMENT
+            page_md_free(find_page_md((void*)a));
+            reset_page_md((void*) a);
         }
       *pte = 0;
     }
@@ -573,27 +582,57 @@ clearpteu(pde_t *pgdir, char *uva)
 // Given a parent process's page table, create a copy
 // of it for a child.
 pde_t*
-copyuvm(pde_t *pgdir, uint sz)
+copyuvm(pde_t *pgdir, uint sz, struct proc* np)
 {
   pde_t *d;
   pte_t *pte;
   uint pa, i, flags;
   char *mem;
 
+  // reset fields on np
+  np->pages_in_ram = 0;
+  np->pages_in_swap = 0;
+
+    int index = 0; // the current page being copied
+
   if((d = setupkvm()) == 0)
     return 0;
+
   for(i = 0; i < sz; i += PGSIZE){
     if((pte = walkpgdir(pgdir, (void *) i, 0)) == 0)
       panic("copyuvm: pte should exist");
-    if(!(*pte & PTE_P))
-      panic("copyuvm: page not present");
-    pa = PTE_ADDR(*pte);
-    flags = PTE_FLAGS(*pte);
-    if((mem = kalloc()) == 0)
-      goto bad;
-    memmove(mem, (char*)P2V(pa), PGSIZE);
-    if(mappages(d, (void*)i, PGSIZE, V2P(mem), flags) < 0)
-      goto bad;
+    if(*pte & PTE_P) {
+        pa = PTE_ADDR(*pte);
+        flags = PTE_FLAGS(*pte);
+        if ((mem = kalloc()) == 0)
+            goto bad;
+        memmove(mem, (char *) P2V(pa), PGSIZE);
+        if (mappages(d, (void *) i, PGSIZE, V2P(mem), flags) < 0)
+            goto bad;
+        np->pages[index].state = MEMORY;
+        np->pages[index].offset = -1;
+        np->pages[index].time_updated = ticks;
+        np->pages_in_ram++;
+    }
+    else{ // page is in swap
+        pte = walkpgdir(d,(void*)i,1);
+        *pte &= ~PTE_P;
+        *pte |= PTE_PG;
+        np->pages[index].state = SWAP;
+        np->pages_in_swap++;
+        np->pages[index].offset = find_page_md((void*)i)->offset;
+    }
+      // regardless of being in swap or in memory, fill in other details..
+      np->pages[index].page_va = (uint) i;
+      index++;
+  }
+
+    // make sure to reset other metadata pages
+  for(; index < MAX_TOTAL_PAGES ; index++){
+     np->pages[index].time_updated = -1;
+      np->pages[index].offset = -1;
+      np->pages[index].state = UNUSED;
+      np->pages[index].page_va = -1;
   }
   return d;
 
