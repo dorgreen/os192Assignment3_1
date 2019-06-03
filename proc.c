@@ -127,6 +127,18 @@ userinit(void)
   extern char _binary_initcode_start[], _binary_initcode_size[];
 
   p = allocproc();
+  p->pages_in_swap = 0;
+  p->pages_in_ram = 0;
+  for(int i = 0 ; i < MAX_TOTAL_PAGES; i++){
+    p->pages[i].state = UNUSED;
+    p->pages[i].pgdir = 0;
+    p->pages[i].page_va = -1;
+    p->pages[i].offset = -1;
+    p->pages[i].time_updated = -1;
+  }
+  for(int i = 0; i < MAX_PSYC_PAGES ; i++){
+    p->swap_spots[i] = 0;
+  }
   
   initproc = p;
   if((p->pgdir = setupkvm()) == 0)
@@ -226,6 +238,8 @@ fork(void)
   // create swap if np->pid > 2
   // if curproc->pid > 2 also deep copy the swap file
 
+
+
   if(np->pid > 2){
     if(curproc->pid > 2){
       // deep copy the swapfile data
@@ -239,13 +253,13 @@ fork(void)
     }
   }
 
-
-//  // deep copy pages metadata
-//  for (int i = 0; i < MAX_TOTAL_PAGES; i++) {
-//    np->pages[i] = curproc->pages[i];
-//    // UPDATE PAGEDIR!!!!
-//    np->pages[i].pgdir = np->pgdir;
-//  }
+    // TODO: MAYBE NOT NEEDED
+  // deep copy pages metadata
+  for (int i = 0; i < MAX_TOTAL_PAGES; i++) {
+    np->pages[i] = curproc->pages[i];
+    // UPDATE PAGEDIR!!!!
+    np->pages[i].pgdir = np->pgdir;
+  }
 
   // deep copy swapfile mappings (assuming no data to be copied on sh and init)
   for (int i = 0; i < MAX_PSYC_PAGES; i++) {

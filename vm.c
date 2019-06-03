@@ -199,16 +199,15 @@ int page_md_free(struct page_metadata* pgmd){
 int swap_out(void){
   // TODO: ADD POLICIES!
   struct proc* this_proc;
-  int page_md_index = 0; // The index of the selected page to swap
   this_proc = myproc();
 
   // LIFO:
-  uint oldest = ~0; // THE LAREGEST UINT!!!!!
+  uint newest = 0;
   struct page_metadata* to_swap = 0;
-  for(page_md_index = 0 ; page_md_index < MAX_TOTAL_PAGES ; page_md_index++){
-    if(this_proc->pages[page_md_index].state == MEMORY && this_proc->pages[page_md_index].time_updated < oldest){
-      oldest = this_proc->pages[page_md_index].time_updated;
-      to_swap = &this_proc->pages[page_md_index];
+  for(int i = 0 ; i < MAX_TOTAL_PAGES ; i++){
+    if(this_proc->pages[i].state == MEMORY && this_proc->pages[i].time_updated > newest){
+      newest = this_proc->pages[i].time_updated;
+      to_swap = &this_proc->pages[i];
     }
   }
 
@@ -236,9 +235,21 @@ int swap_out(void){
 
   writeToSwapFile(this_proc, (char*) P2V(PTE_ADDR(*pte)), to_swap->offset, PGSIZE);
     // handles kfree etc
-  if(page_md_free(to_swap) == -1){
-      return -1;
-  }
+//    if(page_md_free(to_swap) == -1){
+//        return -1;
+//    }
+
+    if(pte == 0) panic("Swapping a virtual address that has no physical address!!");
+
+    if ((*pte & PTE_P) != 0) {
+        uint pa = PTE_ADDR(*pte);
+        if (pa == 0){
+            panic("kfree");
+        }
+        char *v = P2V(pa);
+        kfree(v);
+    }
+
 
   // reset address, set flags
   *pte = 0 | flags | PTE_PG;
@@ -262,7 +273,7 @@ int swap_in(uint va){
 
   this_proc = myproc();
   pgmd = find_page_md((void*)va);
-  if(pgmd == 0) return -1;
+  if(pgmd == 0 || pgmd->state != SWAP) return -1;
 
   // check if it's too many pages
   if (this_proc->pages_in_ram + this_proc->pages_in_swap + 1 >= MAX_TOTAL_PAGES) {
@@ -440,7 +451,7 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz) {
 
   // pages need to be swapped!
   if (this_proc->pages_in_ram + pages_to_add > MAX_PSYC_PAGES) {
-    pages_to_swap = 1 + this_proc->pages_in_ram + pages_to_add - MAX_PSYC_PAGES;
+    pages_to_swap = this_proc->pages_in_ram + pages_to_add - MAX_PSYC_PAGES;
   }
 
   for (; a < newsz; a += PGSIZE) {
@@ -449,7 +460,7 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz) {
     if (this_proc->pid > 2) {
       if (pages_to_swap > 0) {
         swap_out(); // also updates proc->pages_in_ram ; proc->pages_in_swap AND frees the page from RAM!
-        lcr3(V2P(this_proc->pgdir));
+        //lcr3(V2P(this_proc->pgdir)); // no need, swap_out handles that
         pages_to_swap--;
       }
     }

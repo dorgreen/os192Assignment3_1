@@ -169,19 +169,19 @@ int test_pmalloc3(int pid){
 int main(int argc, char *argv[]){
 
     printf(1, "--------- START TESTING! ---------\n");
-//
-//    printf(1, "------- test%d -------\n", test_no);
-//    test_pmalloc();
-//    test_no++;
-//
-//    printf(1, "------- test%d -------\n", test_no);
-//    test_pmalloc2(fork());
-//    test_no++;
-//
-//    printf(1, "------- test%d -------\n", test_no);
-//    test_pmalloc3(fork());
-//    test_no++;
-//
+
+    printf(1, "------- test%d -------\n", test_no);
+    test_pmalloc();
+    test_no++;
+
+    printf(1, "------- test%d -------\n", test_no);
+    test_pmalloc2(fork());
+    test_no++;
+
+    printf(1, "------- test%d -------\n", test_no);
+    test_pmalloc3(fork());
+    test_no++;
+
     printf(1, "------- test%d -------\n", test_no);
     very_simple(fork());
     test_no++;

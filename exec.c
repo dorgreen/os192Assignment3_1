@@ -56,11 +56,6 @@ exec(char *path, char **argv)
   curproc->pages_in_swap = 0;
   curproc->pages_in_ram = 0;
 
-  // re create a new swapfile, as the entire mem image is replaced
-  if(curproc->pid > 2) {
-    removeSwapFile(curproc);
-    createSwapFile(curproc);
-  }
 
   // Load program into memory.
   for(i=0, off=elf.phoff; i<elf.phnum; i++, off+=sizeof(ph)){
@@ -121,6 +116,12 @@ exec(char *path, char **argv)
   // update metadata for new pgdir
   for(int i = 0 ; i< MAX_TOTAL_PAGES ; i++){
     curproc->pages[i].pgdir = pgdir;
+  }
+
+  // re create a new swapfile, as the entire mem image is replaced
+  if(curproc->pid > 2) {
+    removeSwapFile(curproc);
+    createSwapFile(curproc);
   }
 
   curproc->pgdir = pgdir;

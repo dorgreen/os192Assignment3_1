@@ -87,14 +87,22 @@ trap(struct trapframe *tf)
         if(PM_LOCKED(get_flags(PGROUNDDOWN(bad_addr)))){
             cprintf("access locked page!\n"); //TODO DEBUG ONLY
           tf->eax = T_GPFLT;
+          tf->err = T_GPFLT; // does "exit code" mean return value (eax) or error code (err) ?
+          // NO BREAK! CONTINUE TO DEFAULT CASE IF NEEDED
         }
+
         // TASK2: check if we got TRAP14 because it was paged' out.
-        //        if it was paged' out, swap it in and continue without trapping
-        if(PAGEDOUT(get_flags(PGROUNDDOWN(bad_addr)))){
+        //        if it was paged' out, swap it in and continue without panic. the proc will retry in userspace.
+        else if(PAGEDOUT(get_flags(PGROUNDDOWN(bad_addr)))){
           // Page was swapped OUT. page it in.
           cprintf("Pagedout! trap trying to page it in...!\n"); //TODO DEBUG ONLY
-          swap_in(PGROUNDDOWN(bad_addr));
-          break;
+          if(swap_in(PGROUNDDOWN(bad_addr))){
+              return;
+          }
+            else{
+              panic("swap in @ pagefault failed!");
+          }
+
         }
       }
           // NO BREAK! CONTINUE TO DEFAULT CASE IF NEEDED
