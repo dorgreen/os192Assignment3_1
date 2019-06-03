@@ -162,7 +162,9 @@ void *pmalloc(void) {
 // we could protect by setting the "WRITABLE" bit (bit 1) of address ( PTE_W )
 int protect_page(void* ap){
   // if pmalloc'd and start of page
+
   struct plist* free_list = plist_head;
+
   while(free_list != 0){
     if(free_list->va == (uint) ap)
       break;
@@ -171,8 +173,11 @@ int protect_page(void* ap){
     }
   }
 
+    // make sure it's page-alligned
+  if((uint) ap != PGROUNDDOWN((uint)ap)){ return -1;}
+
   // If not found on internal list, it's a dud
-  if(free_list->va != (uint) ap) return -1;
+  if(free_list == 0 || free_list->va != (uint) ap) return -1;
 
   // if flag is set as allocated with PMALLOC, protect the page
   if((get_flags((uint)ap) & PTE_PM)){

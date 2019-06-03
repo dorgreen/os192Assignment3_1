@@ -299,15 +299,12 @@ int swap_in(uint va){
       panic("can't read from swap!");
   }
 
-
-
-  // update that the spot in swap is free
-  // Mark as present and NOT PG
-  set_flags(pgmd->page_va, PTE_P, 0);
-  set_flags(pgmd->page_va, ~PTE_PG, 1);
-
-    // map the physical memory to virtual
-    mappages(this_proc->pgdir, (void*)pgmd->page_va, PGSIZE, V2P(new_page), PTE_W|PTE_U);
+  // map the physical memory to virtual
+  mappages(this_proc->pgdir, (void*)pgmd->page_va, PGSIZE, V2P(new_page), PTE_W|PTE_U);
+    // update that the spot in swap is free
+    // Mark as present and NOT PG
+    set_flags(pgmd->page_va, PTE_P, 0);
+    set_flags(pgmd->page_va, ~PTE_PG, 1);
 
   // update metadata
   pgmd->state = MEMORY;
@@ -315,6 +312,7 @@ int swap_in(uint va){
   pgmd->time_updated = ticks;
   this_proc->pages_in_ram++;
   this_proc->pages_in_swap--;
+  lcr3(V2P(this_proc->pgdir));
 
   return 1;
 }
