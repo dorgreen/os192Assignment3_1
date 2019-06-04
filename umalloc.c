@@ -117,7 +117,7 @@ void *pmalloc(void) {
     plist_head->used = 0;
     plist_head->va = (uint)sbrk(PGSIZE);
     // we record the head of the list inside the proc so that we could deep-copy the list to forked proc
-    //myproc()->plist_head = plist_head; // TODO: UNCOMMENT AND MAKE IT WORK, SHOULD DEEP-COPY LIST ON FORK
+    set_plist_head((uint)plist_head);
   }
 
   struct plist* free_node = plist_head;
@@ -181,6 +181,7 @@ int protect_page(void* ap){
 
   // if flag is set as allocated with PMALLOC, protect the page
   if((get_flags((uint)ap) & PTE_PM)){
+      update_protected_pages_count(1);
     return set_flags((uint) ap, ~PTE_W, 1);
   }
   return -1;
@@ -208,13 +209,19 @@ int pfree(void* ap){
     return -1;
   }
 
-  // Clear PMALLOC flag
-  //set_flags((uint)ap, ~PTE_PM, 1);
 
-  // Set writable flag to ON
-  set_flags((uint)ap, PTE_W, 0);
 
-  // Set present flag to OFF so that this memory won't be availablev
+  if(!(get_flags((uint)ap) & PTE_W)){
+      // This info is needed for #TASK4 ctrl+R
+      update_protected_pages_count(-1);
+
+      // Set writable flag to ON
+      set_flags((uint)ap, PTE_W, 0);
+  }
+
+
+  // Set present flag to OFF so that this memory won't be available
+    // TODO: should we clear it from PTE etc???
   set_flags((uint)ap, ~PTE_P, 1);
 
   // Set internal linkedlist node to free

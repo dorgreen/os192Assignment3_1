@@ -30,6 +30,9 @@ int yield(void);
 int alloc_page_aligned(void);
 int set_flags(unsigned int, int, int);
 int get_flags(unsigned int);
+int set_plist_head(unsigned int);
+void update_protected_pages_count(int);
+void count_pagefaults(void);
 
 // ulib.c
 int stat(char*, struct stat*);

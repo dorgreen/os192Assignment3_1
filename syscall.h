@@ -24,3 +24,7 @@
 #define SYS_alloc_page_aligned 23
 #define SYS_set_flags 24
 #define SYS_get_flags 25
+#define SYS_set_plist_head 26
+#define SYS_update_protected_pages_count 27
+#define SYS_count_pagefaults 28
+

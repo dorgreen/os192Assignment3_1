@@ -81,6 +81,8 @@ trap(struct trapframe *tf)
 
     case T_PGFLT:
         bad_addr = rcr2();
+          // TASK4 data...
+       count_pagefaults();
       if(myproc()->pid > 2){
         // TODO: TASK4: add to pagefault counter
         // TASK1: Fail with exit code 13 if it's locked

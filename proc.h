@@ -45,6 +45,7 @@ struct page_metadata {
     pde_t* pgdir; // for EXEC
 };
 
+
 // Per-process state
 struct proc {
     uint sz;                     // Size of process memory (bytes)
@@ -71,6 +72,14 @@ struct proc {
     int pages_in_swap;
     struct page_metadata pages[MAX_TOTAL_PAGES]; // All pages and where they reside
     struct page_metadata* swap_spots[MAX_PSYC_PAGES]; // either null or the page in that slot
+
+    // plist is used for pmalloc
+    void* plist_head;
+    int protected_pages_count;
+
+    // for printing on ctrl+R
+    int page_fault_counter;
+    int paged_out_counter;
 };
 
 // Process memory is laid out contiguously, low addresses first:

@@ -107,6 +107,9 @@ extern int sys_yield(void);
 extern int sys_alloc_page_aligned(void);
 extern int sys_set_flags(void);
 extern int sys_get_flags(void);
+extern int sys_set_plist_head(void);
+extern int sys_update_protected_pages_count(void);
+extern int sys_count_pagefaults(void);
 
 static int (*syscalls[])(void) = {
 [SYS_fork]    sys_fork,
@@ -134,6 +137,9 @@ static int (*syscalls[])(void) = {
 [SYS_alloc_page_aligned]   sys_alloc_page_aligned,
 [SYS_set_flags]            sys_set_flags,
 [SYS_get_flags]            sys_get_flags,
+[SYS_set_plist_head]  sys_set_plist_head,
+[SYS_update_protected_pages_count] sys_update_protected_pages_count,
+[SYS_count_pagefaults] sys_count_pagefaults,
 };
 
 void

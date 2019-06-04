@@ -114,6 +114,10 @@ found:
 
   if(p->pid > 2){createSwapFile(p);}
 
+  p->plist_head = 0;
+  p->protected_pages_count = 0;
+  p->paged_out_counter = 0;
+  p->paged_out_counter = 0;
 
   return p;
 }
@@ -270,6 +274,14 @@ fork(void)
       np->swap_spots[i] = curproc->swap_spots[i] - curproc->swap_spots[0] + np->swap_spots[0];
     }
   }
+
+  // Copy ctrl+R data #TASK4
+  // allocproc() already reset all fields to 0
+  // allocated memory pages is being calculated from metadata already copied
+  np->paged_out_counter = curproc->paged_out_counter;
+  np->protected_pages_count = curproc->protected_pages_count;
+  // TODO: should we Deep-Copy pmalloc' linked list? or does coping the pgdir is good enough?
+
 
   pid = np->pid;
 
@@ -600,12 +612,28 @@ procdump(void)
       state = states[p->state];
     else
       state = "???";
-    cprintf("%d %s %s", p->pid, state, p->name);
+
+      // TASK 4: VIEWER
+      // <pid><state><allocated memory pages><paged out>
+      // <protecte pages><page faults><total number of paged out><proc name>
+    cprintf("%d %s %d %d %d %d %d %s", p->pid, state, (p->pages_in_ram + p->pages_in_swap), p->pages_in_swap,
+            p->protected_pages_count, p->page_fault_counter, p->paged_out_counter , p->name);
     if(p->state == SLEEPING){
       getcallerpcs((uint*)p->context->ebp+2, pc);
       for(i=0; i<10 && pc[i] != 0; i++)
         cprintf(" %p", pc[i]);
     }
     cprintf("\n");
+    // TASK4. two ints are <current free pages> , <total available pages>
+    // TODO: MAKE IT PRINT THE RIGHT DATA
+    // TODO: HANDLE VERBOSE_PRINT MACRO @ MAKEFILE
+//   if(VERBOSE_PRINT == TRUE){
+//     cprintf("%d / %d free pages in the system ::FIX ME::\n", 1, 1);
+//   }
   }
+}
+
+void count_pagefaults(void){
+    myproc()->page_fault_counter++;
+    return;
 }

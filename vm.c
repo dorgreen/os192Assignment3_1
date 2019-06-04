@@ -263,6 +263,7 @@ int swap_out(void){
   to_swap->pgdir = this_proc->pgdir; // So that we know to which memory space to map it back to
   this_proc->pages_in_swap++;
   this_proc->pages_in_ram--;
+  this_proc->paged_out_counter++; // FOR ctrl+R
   return 1;
 }
 

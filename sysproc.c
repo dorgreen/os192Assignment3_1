@@ -96,3 +96,37 @@ sys_uptime(void)
   release(&tickslock);
   return xticks;
 }
+
+int sys_set_plist_head(void){
+  int new_head;
+
+  if(argint(0, &new_head) < 0){
+      return -1;
+  }
+  else if(new_head != 0){
+    myproc()->plist_head = (void*) new_head;
+    return 1;
+  }
+  else{
+    return -1;
+  }
+}
+
+int sys_update_protected_pages_count(void){
+  int sign;
+
+  if(argint(0, &sign) > -1) {
+    if(sign > 0){
+      myproc()->protected_pages_count++;
+    }
+    else if(sign < 0){
+      myproc()->protected_pages_count--;
+    }
+  }
+  return 0;
+}
+
+int sys_count_pagefaults(void){
+  count_pagefaults();
+  return 0;
+}
