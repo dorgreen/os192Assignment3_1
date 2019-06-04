@@ -197,16 +197,22 @@ int protect_page(void* ap){
 int pfree(void* ap){
   // if pmalloc'd and start of page
   struct plist* free_list = plist_head;
-    while(free_list != 0){
+
+  // if no pages alloced with pmalloc, nothing to pfree..
+  if(free_list == 0) return -1;
+
+  // search for link with that va
+    while(1){
         if(free_list->va == (uint) ap)
             break;
         else{
             free_list = free_list->next;
+            if(free_list  == 0) break;
         }
     }
 
   // If not found on internal list, it's a dud
-  if(free_list->va != (uint) ap) return -1;
+  if(free_list == 0 || free_list->va != (uint) ap) return -1;
 
   // if not pmalloc'd or if not start of page
   if(!(get_flags((uint)ap) & PTE_PM) || (uint)ap != PGROUNDUP((uint) ap)){
