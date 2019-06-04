@@ -102,7 +102,11 @@ trap(struct trapframe *tf)
               return;
           }
             else{
+              // if we can't swap-in and we should be, panic.
+            // if NONE was set, we'll skip to the default case as there is no break :)
+              #ifndef NONE
               panic("swap in @ pagefault failed!");
+              #endif
           }
 
         }

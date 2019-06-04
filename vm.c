@@ -210,14 +210,15 @@ struct page_metadata* find_oldest_page(){
 
 
 int swap_out(void){
-  // TODO: ADD POLICIES!
+
   struct proc* this_proc;
   this_proc = myproc();
   struct page_metadata* to_swap = 0;
 
   #ifdef NONE
   // Don't swap just continue
-      return;
+  // TODO: MAKE SURE I'M WORKING ELSEWHERE
+      return -1;
 
   #elif LIFO
   // LIFO:
@@ -231,7 +232,7 @@ int swap_out(void){
 
   #elif SCFIFO
   //SCFIFO
-  // TODO: add code that selects page_metadata entry according to SCFIFO and puts it in to_swap
+  // TODO: TEST ME
   struct page_metadata* oldest;
   while(1){
     oldest = find_oldest_page();
@@ -486,6 +487,10 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz) {
   if (this_proc->pages_in_ram + pages_to_add > MAX_PSYC_PAGES) {
     pages_to_swap = this_proc->pages_in_ram + pages_to_add - MAX_PSYC_PAGES;
   }
+
+  #ifdef NONE
+    pags_to_swap = 0;
+  #endif
 
   for (; a < newsz; a += PGSIZE) {
     // Swap them pages out!
