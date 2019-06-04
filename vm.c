@@ -200,7 +200,7 @@ struct page_metadata* find_oldest_page(){
   uint oldest = ~0;
   struct page_metadata* oldest_page = 0;
   for(int i = 0 ; i < MAX_TOTAL_PAGES ; i++){
-    if(this_proc->pages[i].state == MEMORY && this_proc->pages[i].time_updated < oldest){
+    if(this_proc->pages[i].state == MEMORY && this_proc->pages[i].time_updated <= oldest){
       oldest = this_proc->pages[i].time_updated;
       oldest_page = &this_proc->pages[i];
     }
