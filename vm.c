@@ -195,15 +195,33 @@ int page_md_free(struct page_metadata* pgmd){
   return -1;
 }
 
+struct page_metadata* find_oldest_page(){
+  struct proc* this_proc = myproc();
+  uint oldest = ~0;
+  struct page_metadata* oldest_page = 0;
+  for(int i = 0 ; i < MAX_TOTAL_PAGES ; i++){
+    if(this_proc->pages[i].state == MEMORY && this_proc->pages[i].time_updated < oldest){
+      oldest = this_proc->pages[i].time_updated;
+      oldest_page = &this_proc->pages[i];
+    }
+  }
+  return oldest_page;
+}
+
 
 int swap_out(void){
   // TODO: ADD POLICIES!
   struct proc* this_proc;
   this_proc = myproc();
+  struct page_metadata* to_swap = 0;
 
+  #ifdef NONE
+  // Don't swap just continue
+      return;
+
+  #elif LIFO
   // LIFO:
   uint newest = 0;
-  struct page_metadata* to_swap = 0;
   for(int i = 0 ; i < MAX_TOTAL_PAGES ; i++){
     if(this_proc->pages[i].state == MEMORY && this_proc->pages[i].time_updated > newest){
       newest = this_proc->pages[i].time_updated;
@@ -211,10 +229,26 @@ int swap_out(void){
     }
   }
 
+  #elif SCFIFO
   //SCFIFO
   // TODO: add code that selects page_metadata entry according to SCFIFO and puts it in to_swap
+  struct page_metadata* oldest;
+  while(1){
+    oldest = find_oldest_page();
+    if( (get_flags(oldest->page_va) & PTE_A) ){
+      // turn off accessed flag
+      set_flags(oldest->page_va, ~PTE_A, 1);
+      // mark as "young"
+      oldest->time_updated = ticks;
+    }
+    else{
+      // oldest is also not accessed. it's our guy
+      to_swap = oldest;
+      break;
+    }
+  }
 
-
+  #endif
 
   // COMMON CODE:
   if(to_swap == 0) return -1;
