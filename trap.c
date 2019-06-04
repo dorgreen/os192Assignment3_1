@@ -97,7 +97,7 @@ trap(struct trapframe *tf)
         //        if it was paged' out, swap it in and continue without panic. the proc will retry in userspace.
         else if(PAGEDOUT(get_flags(PGROUNDDOWN(bad_addr)))){
           // Page was swapped OUT. page it in.
-          cprintf("Pagedout! trap trying to page it in...!\n"); //TODO DEBUG ONLY
+          //cprintf("Pagedout! trap trying to page it in...!\n"); //TODO DEBUG ONLY
           if(swap_in(PGROUNDDOWN(bad_addr))){
               return;
           }

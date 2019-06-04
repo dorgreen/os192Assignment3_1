@@ -146,7 +146,7 @@ void *pmalloc(void) {
 
 
   // try to set flags!
-  if(!set_flags(free_node->va, PTE_PM & PTE_P & PTE_U & PTE_W, 0)){
+  if(!set_flags(free_node->va, PTE_PM | PTE_P | PTE_U | PTE_W, 0)){
     // If failed, mark as free and turn off PRESENT flag
     free_node->used = 0;
     set_flags(free_node->va, ~PTE_P, 1);
@@ -174,10 +174,14 @@ int protect_page(void* ap){
   }
 
     // make sure it's page-alligned
-  if((uint) ap != PGROUNDDOWN((uint)ap)){ return -1;}
+  if((uint) ap != PGROUNDDOWN((uint)ap)){
+    return -1;
+  }
 
   // If not found on internal list, it's a dud
-  if(free_list == 0 || free_list->va != (uint) ap) return -1;
+  if(free_list == 0 || free_list->va != (uint) ap){
+    return -1;
+  }
 
   // if flag is set as allocated with PMALLOC, protect the page
   if((get_flags((uint)ap) & PTE_PM)){
