@@ -479,7 +479,7 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz) {
   pages_to_add = (PGROUNDUP(newsz) - PGROUNDUP(oldsz)) / PGSIZE;
 
   // check if it's too many pages (exclude SH and INIT)
-  if (this_proc->pages_in_ram + this_proc->pages_in_swap + pages_to_add >= MAX_TOTAL_PAGES && this_proc->pid > 2) {
+  if ((this_proc->pages_in_ram + this_proc->pages_in_swap + pages_to_add > MAX_TOTAL_PAGES) && this_proc->pid > 2) {
     panic("Not enough pages!");
   }
 
@@ -489,7 +489,7 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz) {
   }
 
   #ifdef NONE
-    pags_to_swap = 0;
+    pages_to_swap = 0;
   #endif
 
   for (; a < newsz; a += PGSIZE) {
