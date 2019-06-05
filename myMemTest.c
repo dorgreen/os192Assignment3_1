@@ -1,12 +1,87 @@
+
 // Created by Dor Green on 14/05/2019.
 //
-
 #include "user.h"
 #include "types.h"
 #include "mmu.h"
 #include "user.h"
 
 int test_no = 0;
+
+void test3(void){
+    sbrk(10*PGSIZE);
+    exit();
+}
+
+void test2(void) {
+    char *bla = sbrk(20 * PGSIZE);
+
+    for (int i = 0; i < 10; ++i) {
+        bla[i] = i;
+        bla[20 - i] = i;
+    }
+
+    //reading
+    for (int i = 0; i < 10; ++i) {
+        if (bla[i] != i || bla[20 - i] != i) {
+            printf(1, "failed\n");
+        }
+    }
+}
+
+void test1(int flag){
+    // request 20 pages.
+    char * bla = sbrk(20*PGSIZE);
+
+    // write i to page i
+    for(int i = 0; i < 20; i++)
+        bla[i*PGSIZE] = i;
+
+    //read
+    for(int i = 0; i < 20 ; i++){
+        if(bla[i*PGSIZE] != i){
+            printf(1, "Simple Test failed");
+        }
+    }
+    if (flag) exit();
+}
+
+void mySimpleTets(void){
+    int pid;
+
+    if((pid = fork()) == -1) {
+        printf(1, "Fail on forking!..\n");
+        goto bad;
+    }
+
+    if(pid == 0)
+        test1(1);
+    else{
+        wait();
+        printf(1, "done\n");
+    }
+    return;
+
+    bad:
+    exit();
+}
+
+void doubleProcess(){
+    int pid = fork();
+    if(!pid){
+        test2();
+        exit();
+    }
+    int pid2 = fork();
+    if(!pid2){
+        test2();
+        exit();
+    }
+    wait();
+    wait();
+    printf(1,"done\n");
+}
+
 
 int very_simple(int pid){
     if(pid == 0){
@@ -170,9 +245,9 @@ int main(int argc, char *argv[]){
 
     printf(1, "--------- START TESTING! ---------\n");
 
-    printf(1, "------- test%d -------\n", test_no);
-    test_pmalloc();
-    test_no++;
+//    printf(1, "------- test%d -------\n", test_no);
+//    test_pmalloc();
+//    test_no++;
 
     printf(1, "------- test%d -------\n", test_no);
     test_pmalloc2(fork());
@@ -202,7 +277,17 @@ int main(int argc, char *argv[]){
     test_paging(fork(),13);
     test_no++;
 
-    // TODO: ADD MORE TESTS!!
+#ifdef NONE
+    printf(1, "------- test%d -------\n", test_no);
+    mySimpleTets();
+    test_no++;
+
+    printf(1, "------- test%d -------\n", test_no);
+    doubleProcess();
+    test_no++;
+#endif
+
+
 
 
     printf(1, "--------- DONE  TESTING! ---------\n");

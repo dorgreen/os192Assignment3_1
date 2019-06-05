@@ -463,7 +463,6 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz) {
   uint a;
   struct proc *this_proc;
   int pages_to_add;
-  int pages_to_swap = 0;
 
   if (newsz >= KERNBASE)
     return 0;
@@ -478,6 +477,7 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz) {
   pages_to_add = (PGROUNDUP(newsz) - PGROUNDUP(oldsz)) / PGSIZE;
 
 #ifndef NONE
+  int pages_to_swap = 0;
   struct page_metadata *free_page;
   // check if it's too many pages (exclude SH and INIT)
   if ((this_proc->pages_in_ram + this_proc->pages_in_swap + pages_to_add > MAX_TOTAL_PAGES) && this_proc->pid > 2) {
@@ -490,12 +490,11 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz) {
   }
 #endif
 
-  #ifdef NONE
-    pages_to_swap = 0;
-  #endif
+
 
   for (; a < newsz; a += PGSIZE) {
-    // Swap them pages out!
+#ifndef NONE
+      // Swap them pages out!
     // If we're in INIT or SH no need swap out...
     if (this_proc->pid > 2) {
       if (pages_to_swap > 0) {
@@ -504,8 +503,9 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz) {
         pages_to_swap--;
       }
     }
+#endif
 
-    mem = kalloc();
+      mem = kalloc();
 
     if (mem == 0) {
       cprintf("allocuvm out of memory\n");
@@ -555,14 +555,16 @@ deallocuvm(pde_t *pgdir, uint oldsz, uint newsz) {
 
     pte_t *pte;
   uint a;
-  struct proc* this_proc;
 
   if (newsz >= oldsz)
     return oldsz;
 
   a = PGROUNDUP(newsz);
 
+#ifndef NONE
+  struct proc* this_proc;
   this_proc = myproc();
+#endif
 
   // go after pages to be removed...
   for (; a < oldsz; a += PGSIZE) {
@@ -580,13 +582,16 @@ deallocuvm(pde_t *pgdir, uint oldsz, uint newsz) {
 
     // if it's not free it
     else if((*pte & PTE_P)  && ((*pte & PTE_PG) == 0)){
+#ifndef NONE
       // remove pte from swapping DSs
         if(pgdir == this_proc->pgdir){
             page_md_free(find_page_md((void*)a));
             reset_page_md((void*) a);
         }
+#endif
       *pte = 0;
     }
+#ifndef NONE
         // paged out!
     else if(((*pte & PTE_P) == 0) && (*pte & PTE_PG)){
         *pte = 0;
@@ -594,6 +599,7 @@ deallocuvm(pde_t *pgdir, uint oldsz, uint newsz) {
             reset_page_md((void*)a);
         }
     }
+#endif
   }
 
   lcr3(V2P(myproc()->pgdir));
@@ -646,7 +652,9 @@ copyuvm(pde_t *pgdir, uint sz, struct proc* np)
   np->pages_in_ram = 0;
   np->pages_in_swap = 0;
 
-    int index = 0; // the current page being copied
+#ifndef NONE
+  int index = 0; // the current page being copied
+#endif
 
   if((d = setupkvm()) == 0)
     return 0;
@@ -662,24 +670,33 @@ copyuvm(pde_t *pgdir, uint sz, struct proc* np)
         memmove(mem, (char *) P2V(pa), PGSIZE);
         if (mappages(d, (void *) i, PGSIZE, V2P(mem), flags) < 0)
             goto bad;
+
+        #ifndef NONE
         np->pages[index].state = MEMORY;
         np->pages[index].offset = -1;
         np->pages[index].time_updated = ticks;
+        // regardless of being in swap or in memory, fill in other details..
+        np->pages[index].page_va = (uint) i;
+        index++;
+        #endif
         np->pages_in_ram++;
     }
     else{ // page is in swap
+        #ifndef NONE
         pte = walkpgdir(d,(void*)i,1);
         *pte &= ~PTE_P;
         *pte |= PTE_PG;
         np->pages[index].state = SWAP;
         np->pages_in_swap++;
         np->pages[index].offset = find_page_md((void*)i)->offset;
+        // regardless of being in swap or in memory, fill in other details..
+        np->pages[index].page_va = (uint) i;
+        index++;
+        #endif
     }
-      // regardless of being in swap or in memory, fill in other details..
-      np->pages[index].page_va = (uint) i;
-      index++;
-  }
 
+  }
+#ifndef NONE
     // make sure to reset other metadata pages
   for(; index < MAX_TOTAL_PAGES ; index++){
      np->pages[index].time_updated = -1;
@@ -687,6 +704,7 @@ copyuvm(pde_t *pgdir, uint sz, struct proc* np)
       np->pages[index].state = UNUSED;
       np->pages[index].page_va = -1;
   }
+#endif
   return d;
 
 bad:
