@@ -84,10 +84,9 @@ trap(struct trapframe *tf)
           // TASK4 data...
        count_pagefaults();
       if(myproc()->pid > 2){
-        // TODO: TASK4: add to pagefault counter
         // TASK1: Fail with exit code 13 if it's locked
         if(PM_LOCKED(get_flags(PGROUNDDOWN(bad_addr)))){
-            cprintf("access locked page!\n"); //TODO DEBUG ONLY
+            //cprintf("access locked page!\n"); //TODO DEBUG ONLY
           tf->eax = T_GPFLT;
           tf->err = T_GPFLT; // does "exit code" mean return value (eax) or error code (err) ?
           // NO BREAK! CONTINUE TO DEFAULT CASE IF NEEDED
@@ -105,7 +104,7 @@ trap(struct trapframe *tf)
               // if we can't swap-in and we should be, panic.
             // if NONE was set, we'll skip to the default case as there is no break :)
               #ifndef NONE
-              panic("swap in @ pagefault failed!");
+              panic("swap on pagefault failed!");
               #endif
           }
 

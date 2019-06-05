@@ -15,10 +15,13 @@ struct {
 static struct proc *initproc;
 
 int nextpid = 1;
+int total_free_pages = 0;
 extern void forkret(void);
 extern void trapret(void);
 
 static void wakeup1(void *chan);
+void procdump1(void);
+
 
 void
 pinit(void)
@@ -160,6 +163,9 @@ userinit(void)
 
   safestrcpy(p->name, "initcode", sizeof(p->name));
   p->cwd = namei("/");
+
+  // FOR VERBOSE PRINT
+  total_free_pages = count_total_pages();
 
   // this assignment to p->state lets other cores
   // run this process. the acquire forces the above
@@ -319,6 +325,11 @@ exit(void)
   iput(curproc->cwd);
   end_op();
   curproc->cwd = 0;
+
+    // TASK4: IF VERBOSE_PRINT, PRINT PROC STATS UPON EXIT.
+#ifdef TRUE
+    procdump1();
+#endif
 
 
   removeSwapFile(curproc);
@@ -626,12 +637,49 @@ procdump(void)
     cprintf("\n");
     // TASK4. two ints are <current free pages> , <total available pages>
     // TODO: MAKE IT PRINT THE RIGHT DATA
-    // TODO: HANDLE VERBOSE_PRINT MACRO @ MAKEFILE
-//   if(VERBOSE_PRINT == TRUE){
-//     cprintf("%d / %d free pages in the system ::FIX ME::\n", 1, 1);
-//   }
+    #ifdef TRUE
+      cprintf("%d / %d free pages in the system\n", count_total_pages(), total_free_pages);
+    #endif
   }
 }
+
+void procdump1(void){
+    static char *states[] = {
+            [UNUSED]    "unused",
+            [EMBRYO]    "embryo",
+            [SLEEPING]  "sleep ",
+            [RUNNABLE]  "runble",
+            [RUNNING]   "run   ",
+            [ZOMBIE]    "zombie"
+    };
+    int i;
+    struct proc *p;
+    char *state;
+    uint pc[10];
+
+    p = myproc();
+        if(p->state == UNUSED)
+            return;
+        if(p->state >= 0 && p->state < NELEM(states) && states[p->state])
+            state = states[p->state];
+        else
+            state = "???";
+
+        // TASK 4: VIEWER
+        // <pid><state><allocated memory pages><paged out>
+        // <protecte pages><page faults><total number of paged out><proc name>
+        cprintf("%d %s %d %d %d %d %d %s", p->pid, state, (p->pages_in_ram + p->pages_in_swap), p->pages_in_swap,
+                p->protected_pages_count, p->page_fault_counter, p->paged_out_counter , p->name);
+        if(p->state == SLEEPING){
+            getcallerpcs((uint*)p->context->ebp+2, pc);
+            for(i=0; i<10 && pc[i] != 0; i++)
+                cprintf(" %p", pc[i]);
+        }
+        cprintf("\n");
+        // TASK4. two ints are <current free pages> , <total available pages>
+        cprintf("%d / %d free pages in the system\n", count_total_pages(), total_free_pages);
+}
+
 
 void count_pagefaults(void){
     myproc()->page_fault_counter++;

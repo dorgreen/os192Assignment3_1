@@ -94,3 +94,20 @@ kalloc(void)
   return (char*)r;
 }
 
+int count_total_pages(void){
+  struct run *r;
+  int counter = 0;
+
+  // get lock, count nodes
+  acquire(&kmem.lock);
+  r = kmem.freelist;
+
+  while(r != 0){
+    counter++;
+    r = r->next;
+  }
+
+  release(&kmem.lock);
+
+  return counter;
+}
