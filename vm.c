@@ -464,7 +464,6 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz) {
   struct proc *this_proc;
   int pages_to_add;
   int pages_to_swap = 0;
-  struct page_metadata *free_page;
 
   if (newsz >= KERNBASE)
     return 0;
@@ -478,6 +477,8 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz) {
   this_proc = myproc();
   pages_to_add = (PGROUNDUP(newsz) - PGROUNDUP(oldsz)) / PGSIZE;
 
+#ifndef NONE
+  struct page_metadata *free_page;
   // check if it's too many pages (exclude SH and INIT)
   if ((this_proc->pages_in_ram + this_proc->pages_in_swap + pages_to_add > MAX_TOTAL_PAGES) && this_proc->pid > 2) {
     panic("Not enough pages!");
@@ -487,6 +488,7 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz) {
   if (this_proc->pages_in_ram + pages_to_add > MAX_PSYC_PAGES) {
     pages_to_swap = this_proc->pages_in_ram + pages_to_add - MAX_PSYC_PAGES;
   }
+#endif
 
   #ifdef NONE
     pages_to_swap = 0;
@@ -524,6 +526,7 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz) {
     this_proc->pages_in_ram++;
     pages_to_add--;
     //if(this_proc->pid > 2){
+#ifndef NONE
     // Can't fail as we have enough slots
     free_page = find_empty_page_md();
     if (free_page == 0) {
@@ -534,6 +537,7 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz) {
     free_page->page_va = (uint) a;
     free_page->time_updated = ticks;
     free_page->offset = 0;
+#endif
   }
 
   lcr3(V2P(myproc()->pgdir));
